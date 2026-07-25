@@ -456,8 +456,11 @@ restic key list
 # (This authenticates using the current RESTIC_PASSWORD already in the container's env.)
 restic key add
 
-# Confirm the new password opens the repo, then remove the OLD key by its ID from `restic key list`.
-restic key remove <OLD_KEY_ID>
+# Confirm the new password opens the repo, e.g. with 
+RESTIC_PASSWORD="<NEW_PASSWORD>" restic snapshots
+
+# Then remove the OLD key by its ID from `restic key list`.
+RESTIC_PASSWORD="<NEW_PASSWORD>" restic key remove <OLD_KEY_ID>
 ```
 
 (`restic key passwd` does the add-then-remove in one step if you prefer.) Only **after** the repo is re-keyed, update `RESTIC_PASSWORD` in Coolify to the new value and redeploy `backup`. Finally, update the copy stored in your password manager and with the external drive's offline notes (per §5) — that copy is the only way to decrypt the backups if the server is lost.

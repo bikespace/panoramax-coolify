@@ -180,4 +180,16 @@ If you want to modify the information shown by this command, see the [docker ps 
 docker ps --format "table {{.ID}}\t{{.CreatedAt}}\t{{.Names}}"
 ```
 
+For some multi-step commands, you may see instructions to use an interactive shell inside the container:
+
+```bash
+# start a shell in the container
+docker exec -it <container_name> sh
+
+# do the work you need to do
+
+# exit the container shell
+exit
+```
+
 Alternatively, you can connect to a shell inside any running container by using the "terminal" menu in the Coolify UI. In this case, just run the portion of the command that comes after `... exec <container_name>`.
