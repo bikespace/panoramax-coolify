@@ -183,7 +183,7 @@ Two cases still need a manual step:
 
 ```bash
 docker exec -it <auth_container_name> sh -c '
-/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master \
+/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/oauth --realm master \
   --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD"
 /opt/keycloak/bin/kcadm.sh update realms/master \
   -s bruteForceProtected=true -s permanentLockout=false -s failureFactor=10
@@ -204,7 +204,7 @@ Or apply the last two via `kcadm.sh` (reusing the credential-login pattern above
 
 ```bash
 docker exec -it <auth_container_name> sh -c '
-/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master \
+/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/oauth --realm master \
   --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD"
 CID=$(/opt/keycloak/bin/kcadm.sh get clients -r geovisio -q clientId=geovisio --fields id --format csv --noquotes | tail -1)
 /opt/keycloak/bin/kcadm.sh update clients/$CID -r geovisio -s fullScopeAllowed=false

@@ -261,7 +261,7 @@ Alternatively, you can do it via command:
 
 ```bash
 docker exec -it <auth_container_name> sh -c '
-/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master \
+/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/oauth --realm master \
   --user admin --password "$KEYCLOAK_ADMIN_PASSWORD"
 CID=$(/opt/keycloak/bin/kcadm.sh get clients -r geovisio -q clientId=geovisio --fields id --format csv --noquotes | tail -1)
 /opt/keycloak/bin/kcadm.sh update clients/$CID -r geovisio -s "rootUrl=https://<new-domain>"
@@ -408,7 +408,7 @@ Or via `kcadm.sh`, reusing the pattern from §6 step 2:
 
 ```bash
 docker exec -it <auth_container_name> sh -c '
-/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master \
+/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/oauth --realm master \
   --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD"
 CID=$(/opt/keycloak/bin/kcadm.sh get clients -r geovisio -q clientId=geovisio --fields id --format csv --noquotes | tail -1)
 /opt/keycloak/bin/kcadm.sh update clients/$CID -r geovisio -s "secret=<NEW_SECRET>"
@@ -450,7 +450,7 @@ Or via `kcadm.sh`:
 
 ```bash
 docker exec -it <auth_container_name> sh -c '
-/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master \
+/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/oauth --realm master \
   --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD"
 /opt/keycloak/bin/kcadm.sh set-password -r master --username "$KEYCLOAK_ADMIN" --new-password "<NEW_ADMIN_PASSWORD>"
 '

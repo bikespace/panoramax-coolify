@@ -83,6 +83,7 @@ Migrated from local filesystem storage to S3-compatible object storage:
 - **Least-privilege client token scope** — `fullScopeAllowed: false` on the `geovisio` client (it was the only client in the realm still `true`). Tokens now carry a mapped subset of roles instead of the user's full role set. Panoramax reads identity from the `profile`/`email` scopes and does authorization in its own DB, so logins, the API, and CLI uploads are unaffected.
 - **Refresh-token rotation enabled** — `revokeRefreshToken: true` (with `refreshTokenMaxReuse: 0`) makes each refresh token single-use, limiting replay of a stolen refresh token.
 - **These realm changes apply to fresh deploys only** — like the earlier realm hardening, the `--override false` import won't retroactively update a running `geovisio` realm; manual admin-console / `kcadm.sh` steps are documented in [`deployment_instructions.md` §6.1(b)](./deployment_instructions.md#61-keycloak-realm-hardening).
+- **Corrected the `kcadm.sh` server URL in all runbooks** — every `kcadm.sh config credentials` example used `--server http://localhost:8080`, but Keycloak serves under the `/oauth` base path in this deployment (`KC_HTTP_RELATIVE_PATH=/oauth` in `Dockerfile.keycloak`), so the root path returned `404 Not Found`. Fixed all five occurrences (across `deployment_instructions.md` and `backup_and_restore_instructions.md`) to `--server http://localhost:8080/oauth`.
 
 ---
 
