@@ -10,7 +10,7 @@ Variables marked **Required** below are declared in `docker-compose.yml` with th
 
 Variables marked **Optional** have a sensible default baked into `docker-compose.yml`; the default is listed with each one.
 
-Most of the [Secrets](#secrets) below are **Auto-generated** instead: they are declared as Coolify [Magic Environment Variables](https://coolify.io/docs/knowledge-base/environment-variables#magic-environment-variables) (`${SERVICE_PASSWORD_64_*}`, without the `:?` guard, since Coolify guarantees a value), so Coolify fills each with a fresh 64-character value the first time the compose file is loaded and you don't enter them by hand. The one exception among the secrets is `RESTIC_PASSWORD`, which you must generate and store yourself in an external password manager — see [Backup destination](#backup-destination).
+The [Secrets](#secrets) below are also **Required**, declared with the same `${VAR:?}` syntax — but unlike the rest of this deployment's required variables, you generate their values yourself rather than picking a meaningful setting. (An earlier version of this deployment used Coolify [Magic Environment Variables](https://coolify.io/docs/knowledge-base/environment-variables#magic-environment-variables) to auto-generate these; that doesn't work when the compose app is deployed from a git repository — see [coollabsio/coolify#4646](https://github.com/coollabsio/coolify/issues/4646) — so this deployment generates them the same way as `RESTIC_PASSWORD`, which was always a plain variable you generate and store yourself in an external password manager — see [Backup destination](#backup-destination).)
 
 Note that `PGHOST` and `PGUSER` are **not Coolify-settable at all** — they are hardcoded to `db`/`gvs` directly in `docker-compose.yml` and `backup/backup-db.sh`. Coolify's Docker Compose buildpack injects every app-level env var into all services (not just the ones referencing it), and a `PGHOST` meant only for `backup` interferes with the `db` service's own local init script.
 
@@ -25,21 +25,25 @@ Note that `PGHOST` and `PGUSER` are **not Coolify-settable at all** — they are
 
 ## Secrets
 
-The five secrets below are **auto-generated** by Coolify. Each is wired up in `docker-compose.yml` as a Magic Environment Variable named `SERVICE_PASSWORD_64_<NAME>`, which Coolify fills with a fresh 64-character alphanumeric value the first time the compose file is loaded and reuses across every service that references it. On a normal new install there is nothing to type in for these. In the Coolify **Environment Variables** UI they appear under their `SERVICE_PASSWORD_64_*` names, so each row lists both the name the container sees and the name you'll find in Coolify.
+The five secrets below have no meaningful default — generate a strong random value for each and paste it into Coolify's **Environment Variables** UI before your first deploy:
 
-| Variable (in the container) | In Coolify settings                           | Description                                                                                                                                                                                                                                               |
-| --------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OAUTH_CLIENT_SECRET`       | `SERVICE_PASSWORD_64_OAUTH_CLIENT_SECRET`     | A secret key for the geovisio oauth client in keycloak.                                                                                                                                                                                                   |
-| `FLASK_SECRET_KEY`          | `SERVICE_PASSWORD_64_FLASK_SECRET_KEY`        | [Flask's secret key](https://flask.palletsprojects.com/en/3.0.x/config/#SECRET_KEY). A secret key used among other things for securely signing the session cookie. Flask's docs ask for a long random string; the 64-char generated value satisfies that. |
-| `KEYCLOAK_ADMIN_PASSWORD`   | `SERVICE_PASSWORD_64_KEYCLOAK_ADMIN_PASSWORD` | Password of the Keycloak admin account.                                                                                                                                                                                                                   |
-| `PG_PASSWORD`               | `SERVICE_PASSWORD_64_PG_PASSWORD`             | Password of the postgres db account. Used inside `postgres://` connection strings, which is why the no-symbol `SERVICE_PASSWORD_64_*` form is used (a symbol like `@` or `/` would corrupt the URL).                                                      |
-| `KC_DB_PASSWORD`            | `SERVICE_PASSWORD_64_KC_DB_PASSWORD`          | Password for the `keycloak_user` postgres account (used by Keycloak to connect to its DB schema). Also embedded in a connection string — same no-symbol reasoning as `PG_PASSWORD`.                                                                       |
+```bash
+python3 -c "import secrets; print(secrets.token_hex(64))"
+```
 
-`KEYCLOAK_ADMIN` (the admin **username**, default `admin`) is a plain optional variable — not auto-generated — and is the only member of the original secrets group that you may still set by hand.
+This produces a 128-character hex string (no symbols), safe to use as-is anywhere, including inside `postgres://`/JDBC connection strings where a symbol like `@` or `/` would corrupt the URL. Run it once per secret — don't reuse the same value across more than one variable.
 
-These five values live solely in Coolify's env var store, so they are the irreplaceable part of your configuration. The backup service keeps an encrypted copy of them — see [`backup_and_restore_instructions.md`](./backup_and_restore_instructions.md).
+| Variable                  | Description                                                                                                                                                                                                                                                  |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OAUTH_CLIENT_SECRET`     | A secret key for the geovisio oauth client in keycloak.                                                                                                                                                                                                     |
+| `FLASK_SECRET_KEY`        | [Flask's secret key](https://flask.palletsprojects.com/en/3.0.x/config/#SECRET_KEY). A secret key used among other things for securely signing the session cookie. Flask's docs ask for a long random string; the generated value satisfies that.        |
+| `KEYCLOAK_ADMIN_PASSWORD` | Password of the Keycloak admin account.                                                                                                                                                                                                                     |
+| `PG_PASSWORD`              | Password of the postgres db account. Used inside `postgres://` connection strings, which is why a symbol-free generated value is used (a symbol like `@` or `/` would corrupt the URL).                                                                    |
+| `KC_DB_PASSWORD`           | Password for the `keycloak_user` postgres account (used by Keycloak to connect to its DB schema). Also embedded in a connection string — same symbol-free reasoning as `PG_PASSWORD`.                                                                     |
 
-> **Restoring these onto a new instance.** Because magic vars regenerate when the compose file is loaded for a fresh instance, the values Coolify creates will *not* match your backup. Before that first deploy — after saving the compose configuration in Coolify (which surfaces the generated vars in the UI) but *before* clicking Deploy — overwrite each generated `SERVICE_PASSWORD_64_*` value with the one recovered from your backup's `secrets.env`. That file stores them under their plain names, so map by name: `secrets.env`'s `OAUTH_CLIENT_SECRET` → Coolify's `SERVICE_PASSWORD_64_OAUTH_CLIENT_SECRET`, and so on. Double-check each one. Deploying with the generated values bakes the wrong `OAUTH_CLIENT_SECRET` into the imported Keycloak realm and login will fail. The step-by-step is in [`backup_and_restore_instructions.md`](./backup_and_restore_instructions.md).
+`KEYCLOAK_ADMIN` (the admin **username**, default `admin`) is a plain optional variable and is the only member of the original secrets group you don't need to generate.
+
+These five values live solely in Coolify's env var store, so they are the irreplaceable part of your configuration. The backup service keeps an encrypted copy of them — see [`backup_and_restore_instructions.md`](./backup_and_restore_instructions.md), which also covers restoring them onto a new instance.
 
 ## Picture storage (production S3)
 
@@ -115,10 +119,10 @@ The `backup` service ships encrypted Postgres/Keycloak/secrets dumps (via restic
 | `BACKUP_S3_REGION`     | Optional     | Region for the backup bucket. Left optional because many S3-compatible providers ignore it or encode it in the endpoint.                                           |
 | `RESTIC_PASSWORD`      | **Required** | Passphrase protecting the restic repository (Postgres dumps, Keycloak export, secrets). **Store it somewhere independent of the server — it cannot be recovered.** |
 
-> **Generate `RESTIC_PASSWORD` yourself — do not let Coolify auto-generate it.** Unlike the [Secrets](#secrets) above, this one is a plain `${RESTIC_PASSWORD:?}` variable, not a magic var. It is the key that decrypts every backup, so a copy that lives *only* in Coolify (on the same server the backups exist to protect) is worthless the day that server is gone. Generate a strong value, paste it into Coolify, and save it in a password manager (and with the external drive's notes). A quick way to generate one:
+> **Store `RESTIC_PASSWORD` independently — not just in Coolify.** It is the key that decrypts every backup, so a copy that lives *only* in Coolify (on the same server the backups exist to protect) is worthless the day that server is gone. Generate it the same way as the [Secrets](#secrets) above, paste it into Coolify, and additionally save it in a password manager (and with the external drive's notes):
 >
 > ```bash
-> python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+> python3 -c "import secrets; print(secrets.token_hex(64))"
 > ```
 
 You only enter the backup S3 credentials once. `RESTIC_REPOSITORY` and the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_DEFAULT_REGION` names that restic's S3 backend expects are *derived* from the `BACKUP_S3_*` values in `docker-compose.yml`, not entered separately.

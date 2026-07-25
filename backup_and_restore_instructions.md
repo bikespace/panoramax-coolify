@@ -174,7 +174,7 @@ cat /private/tmp/restore/backups/config/secrets.env
 
 Set up the new instance by following [`deployment_instructions.md`](./deployment_instructions.md) — Coolify application settings, S3 buckets, and environment variables — using the secrets you recovered in step 1. If you are restoring onto new storage (e.g. for restore testing or if changing S3-compatible storage providers), you will need to create the three buckets from scratch as described there.
 
-> **⚠️ Overwrite the auto-generated secrets *before* the very first deploy.** Five secrets — `OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY`, `PG_PASSWORD`, `KC_DB_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD` — are Coolify Magic Environment Variables (`SERVICE_PASSWORD_64_*`) that Coolify generates *fresh* when you save the compose configuration. Those generated values will not match your backup. As soon as they appear in the Environment Variables UI (after saving the configuration, but **before** you click Deploy), replace each one with the value from your restored `secrets.env`, matching by name — `secrets.env`'s `OAUTH_CLIENT_SECRET` goes into Coolify's `SERVICE_PASSWORD_64_OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY` into `SERVICE_PASSWORD_64_FLASK_SECRET_KEY`, and so on — then **double-check every pasted value.** If you deploy with the generated values, `keycloak-import` bakes the wrong `OAUTH_CLIENT_SECRET` into the imported realm and the API won't be able to authenticate (you'd then have to fix the values and redeploy). `RESTIC_PASSWORD` is *not* a magic variable — enter the one you recovered in step 0 the same as any normal variable.
+> **⚠️ Enter the recovered secrets *before* the very first deploy.** Five secrets — `OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY`, `PG_PASSWORD`, `KC_DB_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD` — plus `RESTIC_PASSWORD` (already recovered in step 0) have no default and must be set by hand in the Coolify Environment Variables UI before you click Deploy. Enter each one from your restored `secrets.env`, matching by name, then **double-check every pasted value.** If you deploy with a missing or wrong value, `keycloak-import` bakes the wrong `OAUTH_CLIENT_SECRET` into the imported realm and the API won't be able to authenticate (you'd then have to fix the values and redeploy).
 
 With everything configured, launch the fresh instance. This compose file has a `migrations` service (`db-upgrade`, `restart: "no"`) that `api` waits on via `condition: service_completed_successfully`, and a `keycloak-import` service that imports the realm. Both run automatically on a fresh deploy and create the `geovisio` and `keycloak` schemas — empty of rows, but not empty databases. This is expected: `api`/`background-worker`/website will come up successfully with no data, not crash-loop.
 
@@ -349,25 +349,25 @@ Use this when a secret is **compromised**, or when the set of authorized users c
 
 **The core caveat:** for several secrets, editing the value in the Coolify **Environment Variables** UI is *not* enough. The secret was baked into a Postgres role, into the Keycloak realm, or into the encrypted restic repository at first boot, so changing only the env var makes the running copy and the stored copy silently drift apart — breaking logins, DB connections, or backups the next time the affected service restarts. The table below shows which secrets need extra handling.
 
-The five auto-generated secrets appear in the Coolify UI under their `SERVICE_PASSWORD_64_*` names (e.g. `OAUTH_CLIENT_SECRET` is edited as `SERVICE_PASSWORD_64_OAUTH_CLIENT_SECRET`) — the same mapping used in §6 step 2. `RESTIC_PASSWORD` and the S3 credentials are plain variables under their own names.
+All six secrets (`OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY`, `PG_PASSWORD`, `KC_DB_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`, `RESTIC_PASSWORD`) plus the S3 credentials are plain variables under their own names in the Coolify UI.
 
 As in §6, several steps run commands inside a container; see [running commands in Docker](./deployment_instructions.md#appendix-running-commands-in-docker) for finding the Coolify-suffixed container name.
 
-Wherever a step below asks for a new secret value (`<NEW_...>`), generate a strong random one the same way the deployment docs recommend for `RESTIC_PASSWORD`:
+Wherever a step below asks for a new secret value (`<NEW_...>`), generate a strong random one the same way the deployment docs recommend:
 
 ```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+python3 -c "import secrets; print(secrets.token_hex(64))"
 ```
 
-Its output is URL-safe (only letters, digits, `-`, and `_`), so the same value is also safe to drop into the `postgres://` connection strings that carry `PG_PASSWORD` and `KC_DB_PASSWORD` (§7.3) without further escaping.
+Its output is hex (only digits and `a`–`f`, no symbols at all), so the same value is also safe to drop into the `postgres://` connection strings that carry `PG_PASSWORD` and `KC_DB_PASSWORD` (§7.3) without further escaping.
 
-| Secret (Coolify name)                                                      | Baked into                                           | Extra step beyond the env var?                                     |
+| Secret                                                                     | Baked into                                           | Extra step beyond the env var?                                     |
 | -------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------ |
-| `FLASK_SECRET_KEY` (`SERVICE_PASSWORD_64_FLASK_SECRET_KEY`)                | nothing (runtime session-signing key)                | **No** — env var + redeploy `api` (§7.1)                           |
-| `OAUTH_CLIENT_SECRET` (`SERVICE_PASSWORD_64_OAUTH_CLIENT_SECRET`)          | Keycloak `geovisio` client (realm import, one-time)  | **Yes** — update it in Keycloak *and* the env var, in sync (§7.2)  |
-| `PG_PASSWORD` (`SERVICE_PASSWORD_64_PG_PASSWORD`)                          | Postgres `gvs` role (set at first DB init only)      | **Yes** — `ALTER USER gvs …` in the DB (§7.3)                      |
-| `KC_DB_PASSWORD` (`SERVICE_PASSWORD_64_KC_DB_PASSWORD`)                    | Postgres `keycloak_user` role (first DB init only)   | **Yes** — `ALTER USER keycloak_user …` in the DB (§7.3)            |
-| `KEYCLOAK_ADMIN_PASSWORD` (`SERVICE_PASSWORD_64_KEYCLOAK_ADMIN_PASSWORD`)  | Keycloak master-realm admin user (first `auth` boot) | **Yes** — reset inside Keycloak; env var alone does nothing (§7.4) |
+| `FLASK_SECRET_KEY`                                                         | nothing (runtime session-signing key)                | **No** — env var + redeploy `api` (§7.1)                           |
+| `OAUTH_CLIENT_SECRET`                                                      | Keycloak `geovisio` client (realm import, one-time)  | **Yes** — update it in Keycloak *and* the env var, in sync (§7.2)  |
+| `PG_PASSWORD`                                                              | Postgres `gvs` role (set at first DB init only)      | **Yes** — `ALTER USER gvs …` in the DB (§7.3)                      |
+| `KC_DB_PASSWORD`                                                           | Postgres `keycloak_user` role (first DB init only)   | **Yes** — `ALTER USER keycloak_user …` in the DB (§7.3)            |
+| `KEYCLOAK_ADMIN_PASSWORD`                                                  | Keycloak master-realm admin user (first `auth` boot) | **Yes** — reset inside Keycloak; env var alone does nothing (§7.4) |
 | `RESTIC_PASSWORD`                                                          | the encryption of the entire restic repo             | **Yes, critical** — re-key the repo *before* the env var (§7.5)    |
 | Production S3 keys (in `FS_TMP_URL`/`FS_PERMANENT_URL`/`FS_DERIVATES_URL`) | nothing in the DB                                    | Rotate at vendor, update all three URLs (§7.6)                     |
 | Backup S3 keys (`BACKUP_S3_ACCESS_KEY`/`BACKUP_S3_SECRET_KEY`)             | nothing in the DB                                    | Rotate at vendor, update both vars (§7.6)                          |
@@ -376,7 +376,7 @@ After **any** rotation, take a one-off backup (§7.7) — otherwise your newest 
 
 ### 7.1 Env-var-only: `FLASK_SECRET_KEY`
 
-This is a pure runtime value (Flask uses it to sign session cookies) with nothing baked into the DB. Rotating it is just: edit `SERVICE_PASSWORD_64_FLASK_SECRET_KEY` in Coolify → redeploy `api`. Rotating it **invalidates every active session**, so all users are logged out and must sign in again — expected, and exactly what you want if a compromise is suspected.
+This is a pure runtime value (Flask uses it to sign session cookies) with nothing baked into the DB. Rotating it is just: edit `FLASK_SECRET_KEY` in Coolify → redeploy `api`. Rotating it **invalidates every active session**, so all users are logged out and must sign in again — expected, and exactly what you want if a compromise is suspected.
 
 ### 7.2 `OAUTH_CLIENT_SECRET` — must match on both sides
 
@@ -397,7 +397,7 @@ CID=$(/opt/keycloak/bin/kcadm.sh get clients -r geovisio -q clientId=geovisio --
 '
 ```
 
-Then paste the **same** value into `SERVICE_PASSWORD_64_OAUTH_CLIENT_SECRET` in Coolify and redeploy `api`. Verify by logging in (as in §6 step 7).
+Then paste the **same** value into `OAUTH_CLIENT_SECRET` in Coolify and redeploy `api`. Verify by logging in (as in §6 step 7).
 
 ### 7.3 Postgres role passwords: `PG_PASSWORD` and `KC_DB_PASSWORD`
 
@@ -415,7 +415,7 @@ docker exec -it <db_container_name> \
   psql -U gvs -d geovisio -c "ALTER USER keycloak_user WITH PASSWORD '<NEW_KC_DB_PASSWORD>';"
 ```
 
-Then update the env var in Coolify (`SERVICE_PASSWORD_64_PG_PASSWORD` / `SERVICE_PASSWORD_64_KC_DB_PASSWORD`) to the **exact** same value, and redeploy the services that use it:
+Then update the env var in Coolify (`PG_PASSWORD` / `KC_DB_PASSWORD`) to the **exact** same value, and redeploy the services that use it:
 
 - `PG_PASSWORD`: everything with `DB_URL` — `api`, all `background-worker-*`, `migrations` — plus the `backup` service (which also carries `PG_PASSWORD` for `pg_dump`).
 - `KC_DB_PASSWORD`: `auth`, `keycloak-export`, `keycloak-import` — plus the `backup` service (it carries this value for the config backup) and the `db` service.
@@ -438,7 +438,7 @@ docker exec -it <auth_container_name> sh -c '
 '
 ```
 
-Then update `SERVICE_PASSWORD_64_KEYCLOAK_ADMIN_PASSWORD` in Coolify to the same value — not because the running `auth` service needs it (it doesn't re-read it), but so it stays correct for the `backup` service's `secrets.env` and for any future fresh deploy. (`KEYCLOAK_ADMIN`, the admin *username*, is a plain variable you can likewise change here if desired.)
+Then update `KEYCLOAK_ADMIN_PASSWORD` in Coolify to the same value — not because the running `auth` service needs it (it doesn't re-read it), but so it stays correct for the `backup` service's `secrets.env` and for any future fresh deploy. (`KEYCLOAK_ADMIN`, the admin *username*, is a plain variable you can likewise change here if desired.)
 
 ### 7.5 `RESTIC_PASSWORD` — re-key the repo, do **not** just swap the variable
 

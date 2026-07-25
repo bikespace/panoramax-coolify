@@ -150,7 +150,7 @@ Every environment variable is configured directly in the Coolify UI, in the Envi
 
 See [`configuration_options.md`](./configuration_options.md) for the full list of variables, which ones are required, and what each one does.
 
-Most of the application secrets (`OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY`, `PG_PASSWORD`, `KC_DB_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`) are Coolify Magic Environment Variables — Coolify auto-generates them the first time the compose file is loaded, so you don't set them by hand on a fresh install. The exception is `RESTIC_PASSWORD`, which you must generate and record yourself (see [configuration_options.md → Backup destination](./configuration_options.md#backup-destination)). If you are *restoring* rather than deploying fresh, the auto-generated secrets must instead be overwritten with your recovered values before the first deploy — see the restore runbook.
+The six secrets (`OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY`, `PG_PASSWORD`, `KC_DB_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`, `RESTIC_PASSWORD`) have no meaningful default — generate a value for each yourself and enter it by hand before deploying (see [configuration_options.md → Secrets](./configuration_options.md#secrets) for the generator one-liner). Coolify's Magic Environment Variables would normally auto-generate secrets like these, but that feature doesn't work when a compose app is deployed from a git repository, as this one is — see [coollabsio/coolify#4646](https://github.com/coollabsio/coolify/issues/4646) — so this deployment does not rely on it. If you are *restoring* rather than deploying fresh, enter the recovered values from your backup instead of generating new ones — see the restore runbook.
 
 ---
 
