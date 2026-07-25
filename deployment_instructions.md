@@ -137,7 +137,7 @@ aws s3api get-bucket-acl \
 
 Follow the [instructions for a Coolify docker compose deployment](https://coolify.io/docs/applications/build-packs/docker-compose), pointing Coolify at this repository with the following settings:
 
-- Git source: https://github.com/tallcoleman/panoramax-coolify.git
+- Git source: https://github.com/bikespace/panoramax-coolify.git
 - Base directory: `/docker/full-keycloak-auth`
 - Docker compose location: `/docker-compose.yml` (slight change, default is `.yaml`)
 - Fill out "domain for reverseproxy" (leave the others blank) and make sure to put the same domain (without the `https://` prefix) in the `DOMAIN` environment variable as well
