@@ -157,17 +157,29 @@ From your password manager/HDD notes, get `RESTIC_PASSWORD` + `BACKUP_S3_ACCESS_
 
 From any machine with [restic installed](https://restic.readthedocs.io/en/stable/020_installation.html) and network access to the S3 endpoint (e.g. your own computer), run the following to get the secrets that should be copied into the Coolify UI along with the other environment variables documented in [`configuration_options.md`](./configuration_options.md).
 
+`secrets.env` contains **every app secret in plaintext**, so restore it into a private directory rather than world-readable `/tmp`, and delete it once you've transcribed the values:
+
 ```bash
+# Private working dir (owner-only) — not /tmp, which is world-readable on multi-user hosts.
+mkdir -p ~/panoramax-restore && chmod 700 ~/panoramax-restore
+
 RESTIC_REPOSITORY="s3:<BACKUP_S3_ENDPOINT>/<BACKUP_S3_BUCKET>/restic" \
 RESTIC_PASSWORD="<YOUR_RESTIC_PASSWORD>" \
 AWS_ACCESS_KEY_ID="<BACKUP_S3_ACCESS_KEY>" \
 AWS_SECRET_ACCESS_KEY="<BACKUP_S3_SECRET_KEY>" \
 AWS_DEFAULT_REGION="<BACKUP_S3_REGION>" \ # optional, many S3-compatible providers ignore it
-restic restore latest --tag config --target /tmp/restore
+restic restore latest --tag config --target ~/panoramax-restore
 
-# review /tmp/restore/config/secrets.env
-# can use any text editor of your choice or e.g. on mac
-cat /private/tmp/restore/backups/config/secrets.env
+# review the secrets (any text editor works too):
+cat ~/panoramax-restore/backups/config/secrets.env
+```
+
+Once you've copied every value into the Coolify UI (step 2), securely delete the restored file so the plaintext secrets don't linger on disk:
+
+```bash
+shred -u ~/panoramax-restore/backups/config/secrets.env
+# shred isn't available everywhere (e.g. macOS) — there, just remove the dir:
+rm -rf ~/panoramax-restore
 ```
 
 ### 2. Deploy the full stack, then restore the databases.
@@ -229,6 +241,12 @@ pg_restore -v -h db -U gvs -d keycloak --clean --if-exists /tmp/restore/backups/
 ```
 
 Or take the portable route: skip the dump and start a clean Keycloak with an import pointing at the exported `geovisio-realm.json` — that file comes from the `config` tag, not `db`; see step 1 above.
+
+Once the restore has loaded, remove the dumps from the container's `/tmp` — they contain the Postgres role-password hashes and the full Keycloak realm. (Lower risk than step 1 since the `backup` container is single-tenant and ephemeral, but still worth not leaving behind.)
+
+```bash
+rm -rf /tmp/restore
+```
 
 Once the dump is restored, redeploy the project so that `api`, `auth`, and `background-worker` pick up the restored data.
 
@@ -495,5 +513,5 @@ At minimum run `backup-config.sh` (refreshes `secrets.env`), plus `backup-db.sh`
 
 - **Sequence within a night:** images run first (02:00), DB second (02:30). A picture uploaded in between is captured next night; on restore, any DB row whose file isn't present yet is harmless and clears on the next cycle. Perfect point-in-time consistency isn't needed because picture files are immutable.
 - **Important! Test that you can restore before you _need_ to restore!!** Do a real restore into a scratch project at least quarterly, and after any major Panoramax or Keycloak upgrade (PostGIS/Keycloak schema versions must match between dump and restore target). Run `docker exec <backup_container_name> restic-check.sh` weekly.
-- **Retention** defaults to 7 daily / 5 weekly / 12 monthly, overridable via `RESTIC_KEEP_DAILY`/`RESTIC_KEEP_WEEKLY`/`RESTIC_KEEP_MONTHLY` — tune to taste. Images rely on `rclone copy` (additive) plus the backup S3 bucket's versioning/lifecycle rule.
+- **Retention** defaults to 7 daily / 5 weekly / 12 monthly, overridable via `RESTIC_KEEP_DAILY`/`RESTIC_KEEP_WEEKLY`/`RESTIC_KEEP_MONTHLY` — tune to taste. Images use `rclone sync` (exact mirror — deletions propagate), so the backup S3 bucket's object-versioning + 30-day lifecycle rule is the safety net for accidental deletions.
 - **Schedule** defaults to 02:00/02:30/02:45 nightly with a weekly integrity check, overridable via `BACKUP_CRON_IMAGES`/`BACKUP_CRON_DB`/`BACKUP_CRON_CONFIG`/`BACKUP_CRON_CHECK` — keep images before DB if you change them, since the point-in-time reasoning above depends on that order.

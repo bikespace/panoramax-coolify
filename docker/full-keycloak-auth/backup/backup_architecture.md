@@ -22,9 +22,9 @@ Everything runs inside one small `backup` sidecar container defined in `docker-c
 ## Why two tools
 
 - **`restic`** handles Postgres dumps, the Keycloak export, and secrets/config. It is encrypted (some of this data contains credentials), deduplicated, snapshotted, and has trivial retention via `forget`/`prune`.
-- **`rclone`** handles the images (production S3 → backup S3). It is purpose-built for S3-to-S3, transfers only new/changed objects, and — with `copy` rather than `sync` — never deletes from the backup. Panoramax picture files are **immutable** once written, so after the first big sync each run only ships newly-uploaded pictures.
+- **`rclone`** handles the images (production S3 → backup S3). It is purpose-built for S3-to-S3 and transfers only new/changed objects. It runs `sync`, so the backup is an exact mirror of production's permanent bucket: a picture removed in production is removed from the backup on the next run. Panoramax picture files are **immutable** once written, so after the first big sync each run only ships newly-uploaded pictures.
 
-The `copy`-not-`sync` choice is deliberate and load-bearing: an original removed from production is retained in the backup. Switching to `sync` would make the backup an exact mirror, propagating deletions.
+The `sync` (mirror) choice means the deletion safety net lives in the *backup bucket*, not in the copy semantics: its object-versioning + 30-day lifecycle rule (see [deployment_instructions.md §2.1](../../../deployment_instructions.md#21-backup-bucket-details)) is what retains an accidentally-deleted original. To instead keep deleted originals in the backup indefinitely, switch `sync` to `copy` (additive: never deletes) in `backup-images.sh` — this matches the note in that script.
 
 ## Where Keycloak's data lives
 
