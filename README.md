@@ -26,6 +26,24 @@ See `CHANGELOG.md` for a summary of changes made relative to the upstream exampl
 
 ---
 
+## Validating docker-compose.yml locally
+
+`docker-compose.yml` uses Coolify's `exclude_from_hc` extension field, which isn't part of the Compose Specification — a plain `docker compose config` will reject it as an unknown key. Coolify strips this field server-side before validating; do the same locally. The command below also passes dummy values for the `${VAR:?}` variables the file requires, so it can be copy-pasted and run as-is — no real secrets or `.env` file needed just to check the file parses:
+
+```bash
+grep -v 'exclude_from_hc' docker/full-keycloak-auth/docker-compose.yml | \
+  DOMAIN=x OAUTH_CLIENT_SECRET=x KC_DB_PASSWORD=x KEYCLOAK_ADMIN_PASSWORD=x PG_PASSWORD=x \
+  FLASK_SECRET_KEY=x S3_DERIVATES_PUBLIC_URL=x S3_PERMANENT_PUBLIC_URL=x \
+  FS_TMP_URL=x FS_PERMANENT_URL=x FS_DERIVATES_URL=x \
+  BACKUP_S3_ENDPOINT=x BACKUP_S3_BUCKET=x BACKUP_S3_ACCESS_KEY=x BACKUP_S3_SECRET_KEY=x \
+  RESTIC_PASSWORD=x \
+  docker compose -f - config -q
+```
+
+No output and a zero exit code means the file is valid.
+
+---
+
 ## Syncing with upstream
 
 The upstream deployment files live at `docker/full-keycloak-auth/` in the [panoramax/server/api](https://gitlab.com/panoramax/server/api) repo on the `main` branch. Because this repo uses the same path, git can diff them directly.
