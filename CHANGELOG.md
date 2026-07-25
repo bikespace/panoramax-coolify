@@ -64,6 +64,10 @@ Migrated from local filesystem storage to S3-compatible object storage:
 - **Self-registration disabled** — `registrationAllowed: false` in the realm config; accounts must be created by an admin.
 - **Email verification required** — `verifyEmail: true` added to the realm config.
 - **`API_REGISTRATION_IS_OPEN`** — added to `docker-compose.yml` and `env.example` (defaults to `False`) to surface the registration policy in the website UI and federation metadata.
+- **Brute-force detection enabled** — `bruteForceProtected: true` with `failureFactor: 10` (temporary lockout; `permanentLockout` kept `false` so an attacker can't lock a known user out permanently). Previously off, allowing unlimited online password guessing against the public login.
+- **Password policy added** — `passwordPolicy: "length(12) and notUsername(undefined)"`; previously there was no policy, so a user could set a 1-character password.
+- **Direct access grant disabled on the `geovisio` client** — `directAccessGrantsEnabled: false`. The API and CLI use the authorization-code flow plus bearer API tokens, not the password grant, so this removes an unused headless brute-force channel with no functional impact. (`admin-cli` keeps it.)
+- **Applies to fresh deploys only** — the realm import runs `--override false`, so these do not retroactively update an already-running `geovisio` realm, and the `master` realm (admin console) is never covered by the import. Both are handled via the manual steps documented in [`deployment_instructions.md` §6.1](./deployment_instructions.md#61-keycloak-realm-hardening).
 
 ---
 

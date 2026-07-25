@@ -37,7 +37,7 @@
     "duplicateEmailsAllowed": false,
     "resetPasswordAllowed": true,
     "editUsernameAllowed": true,
-    "bruteForceProtected": false,
+    "bruteForceProtected": true,
     "permanentLockout": false,
     "maxTemporaryLockouts": 0,
     "maxFailureWaitSeconds": 900,
@@ -45,7 +45,8 @@
     "waitIncrementSeconds": 60,
     "quickLoginCheckMilliSeconds": 1000,
     "maxDeltaTimeSeconds": 43200,
-    "failureFactor": 30,
+    "failureFactor": 10,
+    "passwordPolicy": "length(12) and notUsername(undefined)",
     "roles": {
         "realm": [
             {
@@ -625,7 +626,7 @@
             "consentRequired": false,
             "standardFlowEnabled": true,
             "implicitFlowEnabled": false,
-            "directAccessGrantsEnabled": true,
+            "directAccessGrantsEnabled": false,
             "serviceAccountsEnabled": false,
             "publicClient": false,
             "frontchannelLogout": true,

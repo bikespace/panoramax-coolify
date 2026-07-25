@@ -166,6 +166,35 @@ On first deploy Keycloak will import the realm automatically. The `migrations` s
 
 - Configure SMTP manually in the Keycloak admin console (`<YOUR_INSTANCE_DOMAIN>/oauth`, Realm settings > Email). It is deliberately left out of the automated realm import, so password reset and email verification will not work until you set it up.
 - Confirm the automatic backups are running — see [Confirming backups work on a new instance](./backup_and_restore_instructions.md#confirming-backups-work-on-a-new-instance).
+- Harden the Keycloak `master` realm — see [6.1](#61-keycloak-realm-hardening) below.
+
+### 6.1 Keycloak realm hardening
+
+The imported `geovisio` realm ships hardened: brute-force detection is **on** (temporary lockout after 10 failed logins), a password policy requires a minimum of 12 characters that can't equal the username, and the unused direct-access-grant (password) flow is disabled on the `geovisio` client. On a **fresh** deploy you get all of this automatically and there's nothing to do here.
+
+Two cases still need a manual step:
+
+**(a) Master realm (recommended for every instance).** The admin-console login lives in Keycloak's `master` realm, which is created by Keycloak itself at first boot and is *not* part of the realm import — so it does **not** inherit the settings above. It is publicly reachable at `<YOUR_INSTANCE_DOMAIN>/oauth/admin`. The `admin` account is already protected by the strong generated `KEYCLOAK_ADMIN_PASSWORD` (a password policy there adds little for a single admin), so the step that matters is enabling brute-force detection on `master`:
+
+- Admin console: switch to the **master** realm → Realm settings → Security defenses → Brute force detection → enable, set *Max login failures* = `10`, keep temporary (not permanent) lockout.
+- Or via `kcadm.sh` (find the `auth` container name per the [appendix](#appendix-running-commands-in-docker)):
+
+```bash
+docker exec -it <auth_container_name> sh -c '
+/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master \
+  --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD"
+/opt/keycloak/bin/kcadm.sh update realms/master \
+  -s bruteForceProtected=true -s permanentLockout=false -s failureFactor=10
+'
+```
+
+This is a one-time manual step and is not persisted in the repo, so re-apply it if the `master` realm is ever recreated from scratch.
+
+**(b) Upgrading an already-running instance.** The realm import runs with `--override false` (see the `keycloak-import` service in `docker-compose.yml`), so pulling these changes and redeploying does **not** retroactively update an existing `geovisio` realm. Apply them by hand in the admin console (realm `geovisio`):
+
+- Realm settings → Security defenses → Brute force detection → enable, *Max login failures* = `10`, temporary lockout.
+- Authentication → Policies → Password policy → add *Minimum Length* `12` and *Not Username*.
+- Clients → `geovisio` → untick **Direct access grants** → Save.
 
 ---
 
