@@ -172,7 +172,7 @@ On first deploy Keycloak will import the realm automatically. The `migrations` s
 
 ### 6.1 Keycloak realm hardening
 
-The imported `geovisio` realm ships hardened: brute-force detection is **on** (temporary lockout after 10 failed logins), a password policy requires a minimum of 12 characters that can't equal the username, and the unused direct-access-grant (password) flow is disabled on the `geovisio` client. On a **fresh** deploy you get all of this automatically and there's nothing to do here.
+The imported `geovisio` realm ships hardened: brute-force detection is **on** (temporary lockout after 10 failed logins), a password policy requires a minimum of 12 characters that can't equal the username, the unused direct-access-grant (password) flow is disabled on the `geovisio` client, that client's token scope is least-privilege (`fullScopeAllowed: false`), and refresh-token rotation is on (`revokeRefreshToken: true`). On a **fresh** deploy you get all of this automatically and there's nothing to do here.
 
 Two cases still need a manual step:
 
@@ -197,6 +197,20 @@ This is a one-time manual step and is not persisted in the repo, so re-apply it 
 - Realm settings → Security defenses → Brute force detection → enable, *Max login failures* = `10`, temporary lockout.
 - Authentication → Policies → Password policy → add *Minimum Length* `12` and *Not Username*.
 - Clients → `geovisio` → untick **Direct access grants** → Save.
+- Clients → `geovisio` → Client scopes → `geovisio-dedicated` → **Scope** tab → turn **Full scope allowed** off. This scopes the client's tokens to a mapped subset of roles instead of the user's full role set. Panoramax reads identity from the `profile`/`email` scopes and does its own authorization, so this is transparent to logins, the API, and CLI uploads — but confirm all three still work after applying it.
+- Realm settings → Sessions → turn **Revoke refresh token** on. This enables refresh-token rotation (each refresh token is single-use), limiting replay of a stolen refresh token. If you ever see refreshes failing under concurrent requests, raise *Refresh token max reuse* from `0` to `1`.
+
+Or apply the last two via `kcadm.sh` (reusing the credential-login pattern above):
+
+```bash
+docker exec -it <auth_container_name> sh -c '
+/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master \
+  --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD"
+CID=$(/opt/keycloak/bin/kcadm.sh get clients -r geovisio -q clientId=geovisio --fields id --format csv --noquotes | tail -1)
+/opt/keycloak/bin/kcadm.sh update clients/$CID -r geovisio -s fullScopeAllowed=false
+/opt/keycloak/bin/kcadm.sh update realms/geovisio -s revokeRefreshToken=true
+'
+```
 
 ---
 

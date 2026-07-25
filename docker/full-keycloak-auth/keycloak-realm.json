@@ -5,7 +5,7 @@
     "displayNameHtml": "",
     "notBefore": 0,
     "defaultSignatureAlgorithm": "RS256",
-    "revokeRefreshToken": false,
+    "revokeRefreshToken": true,
     "refreshTokenMaxReuse": 0,
     "accessTokenLifespan": 300,
     "accessTokenLifespanForImplicitFlow": 900,
@@ -649,7 +649,7 @@
                 "token.response.type.bearer.lower-case": "false"
             },
             "authenticationFlowBindingOverrides": {},
-            "fullScopeAllowed": true,
+            "fullScopeAllowed": false,
             "nodeReRegistrationTimeout": -1,
             "protocolMappers": [
                 {
