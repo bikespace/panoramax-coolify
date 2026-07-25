@@ -71,6 +71,15 @@ Migrated from local filesystem storage to S3-compatible object storage:
 
 ---
 
+## Network exposure and supply-chain hardening
+
+- **Internal services no longer published to the host** — removed the `ports:` mappings from `db`, `api`, and `website` in `docker-compose.yml`. The short `- <n>` form publishes to `0.0.0.0` on a random host port, which bypassed the reverse proxy and exposed a superuser Postgres (`gvs`) and the un-fronted API/website directly on the host network. All three are still reachable by service name over the compose network (`db:5432`, `api:5000`, `website:3000`), which is how nginx and the other services already reach them; `docker exec` remains the debugging path. `reverseproxy`'s host port is kept — it is the Traefik/Coolify ingress.
+- **supercronic download checksum-verified** — `backup/Dockerfile` now downloads the pinned `v0.2.33` binary to a temp path and verifies it against the SHA1 published on the upstream release (`71b0d58c…`) before installing, so the build fails closed on a hash mismatch. Previously the binary was fetched and run with no integrity check, inside the container that holds every app secret and both S3 key sets. (aptible/supercronic publishes only SHA1, not SHA256.)
+- **nginx base image refreshed** — `Dockerfile.nginx` bumped from `nginx:1.25.5` (early 2024) to `nginx:1.27.5` to clear accrued CVEs. Config-compatible; no `nginx.conf` changes.
+- **Image-pinning guidance added** — `deployment_instructions.md` §4 now recommends operators pin `GEOVISIO_IMAGE_TAG`/`WEBSITE_IMAGE_TAG` to a specific released version rather than the default `latest`, for reproducible and controlled upgrades. The defaults remain `latest` so the images stay user-configurable.
+
+---
+
 ## Required variable enforcement
 
 Variables that have no default and will cause a broken or cryptic deployment if unset are marked with `:?` in `docker-compose.yml`. Docker Compose (and Coolify) will refuse to start and report a clear error listing any missing variables, rather than silently passing empty strings into containers.

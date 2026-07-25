@@ -152,6 +152,8 @@ See [`configuration_options.md`](./configuration_options.md) for the full list o
 
 The six secrets (`OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY`, `PG_PASSWORD`, `KC_DB_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`, `RESTIC_PASSWORD`) have no meaningful default — generate a value for each yourself and enter it by hand before deploying (see [configuration_options.md → Secrets](./configuration_options.md#secrets) for the generator one-liner). Coolify's Magic Environment Variables would normally auto-generate secrets like these, but that feature doesn't work when a compose app is deployed from a git repository, as this one is — see [coollabsio/coolify#4646](https://github.com/coollabsio/coolify/issues/4646) — so this deployment does not rely on it. If you are *restoring* rather than deploying fresh, enter the recovered values from your backup instead of generating new ones — see the restore runbook.
 
+> **Recommended: pin your image versions.** The Panoramax API and website images default to the `latest` tag (`GEOVISIO_IMAGE_TAG` and `WEBSITE_IMAGE_TAG` — see [configuration_options.md](./configuration_options.md)). `latest` always pulls the newest release, which means a redeploy can silently bring in a changed image you didn't intend to test. For reproducible, controlled upgrades — and so you decide *when* to move to a new version — set both variables to a specific released version (e.g. `2.7.0`) rather than leaving them on `latest`, and bump them deliberately when you're ready to upgrade.
+
 ---
 
 ## 5. Deploy

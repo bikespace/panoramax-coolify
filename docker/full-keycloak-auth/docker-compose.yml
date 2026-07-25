@@ -217,8 +217,10 @@ services:
           "geo_coverage": {"en": "Anywhere you like", "fr": "Partout où le vent vous portera"}
         }
       API_REGISTRATION_IS_OPEN: ${API_REGISTRATION_IS_OPEN:-False} # True if the instance is open to registration, False if not, it is only used in the federation for the moment
-    ports:
-      - 5000
+    # No host port published: the API's only ingress is reverseproxy (nginx),
+    # which reaches it as api:5000 over the compose network. Publishing to the
+    # host would expose the un-fronted API directly. Use `docker exec` for
+    # debugging (see deployment_instructions.md appendix).
     healthcheck:
       test: python -c "import requests; requests.get('http://localhost:5000/api').raise_for_status()"
       interval: 4s
@@ -247,8 +249,8 @@ services:
       VITE_META_TITLE: "${VITE_META_TITLE:-My Panoramax: The free alternative to photo-mapping territories}"
       # The description for meta tags, which is useful for SEO.
       VITE_META_DESCRIPTION: "${VITE_META_DESCRIPTION:-Panoramax is a digital resource for sharing and using field photos. Anyone can take photographs of places visible from public roads and contribute them to the Panoramax database.}"
-    ports:
-      - 3000
+    # No host port published: reached as website:3000 over the compose network
+    # by reverseproxy (nginx). Publishing to the host would expose it directly.
     restart: always
 
   # Background workers used to process pictures in the background
@@ -324,8 +326,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.postgres
-    ports:
-      - 5432
+    # No host port published: Postgres is reached as db:5432 over the compose
+    # network by every service. The gvs user is the cluster superuser, so
+    # publishing 5432 to the host (0.0.0.0, random port) would be a direct
+    # superuser-DB exposure. Use `docker exec` for maintenance.
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     restart: always
