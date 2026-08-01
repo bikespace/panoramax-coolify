@@ -37,25 +37,42 @@ No output and a zero exit code means the file is valid. The `SERVICE_PASSWORD_64
 
 The upstream deployment files live at `docker/full-keycloak-auth/` in the [panoramax/server/api](https://gitlab.com/panoramax/server/api) repo on the `main` branch. Because this repo uses the same path, git can diff them directly.
 
-**One-time setup:**
+**Check for new upstream changes:**
+```bash
+sh scripts/check-upstream.sh
+```
+
+This fetches upstream and lists any commits touching `docker/full-keycloak-auth/` since the last one that was reviewed. It writes nothing; run it as often as you like. No setup needed — it fetches by URL rather than through a named remote.
+
+Once you've reviewed what it reports — ported the changes, or decided they don't apply — mark them done:
+
+```bash
+sh scripts/check-upstream.sh --record
+```
+
+That updates `.upstream-sync`, which records the upstream **commit SHA** last reviewed (plus the date, as human context). A SHA rather than a date because it's exact and self-verifying: the next check diffs from that commit, so nothing can slip through a gap and there's no cutoff date to remember. Only `--record` writes to it, so the recorded SHA always means "a human reviewed this", not "someone ran the script".
+
+**Inspect or pull in a file.** These need the upstream remote configured (the check script does not):
+
 ```bash
 git remote add upstream https://gitlab.com/panoramax/server/api.git
 git fetch upstream
 ```
 
-**See what changed upstream in the files this repo tracks:**
-```bash
-git diff HEAD upstream/main -- docker/full-keycloak-auth/
-```
+Then:
 
-**Inspect a specific file:**
 ```bash
+# Read a file as it exists upstream
 git show upstream/main:docker/full-keycloak-auth/nginx.conf
-```
 
-**Pull in a specific updated file:**
-```bash
+# Overwrite our copy with the upstream version
 git checkout upstream/main -- docker/full-keycloak-auth/nginx.conf
 ```
 
-**Note:** `docker-compose.yml` will always show one intentional divergence in the diff — the top-level `x-base-geovisio` anchor uses `image: panoramax/api:${GEOVISIO_IMAGE_TAG:-latest}` here instead of a `build:` block, since this repo does not include the API source code. Any other diffs indicate upstream changes worth reviewing.
+**Two different diffs — don't confuse them.** To see *what upstream changed*, diff upstream against upstream, which is what the check script does:
+
+```bash
+git diff <last_reviewed_sha>..upstream/main -- docker/full-keycloak-auth/
+```
+
+Diffing our tree against upstream (`git diff HEAD upstream/main`) shows something else entirely: our **total divergence**, which is large and almost entirely intentional. Everything this repo added — the `backup/` directory, the Dockerfiles, `keycloak-export-loop.sh`, `env.example` — appears as a deletion, and `docker-compose.yml` always shows the `x-base-geovisio` anchor using `image: panoramax/api:${GEOVISIO_IMAGE_TAG:-latest}` instead of a `build:` block, since this repo does not include the API source code. See the [CHANGELOG](./CHANGELOG.md) for the full list. That diff is useful for auditing how far we've drifted, but it buries upstream's actual changes in hundreds of lines of noise.
