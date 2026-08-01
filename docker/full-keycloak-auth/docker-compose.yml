@@ -14,13 +14,8 @@
 # variables, auto-generated the first time the compose file is loaded. RESTIC_PASSWORD is
 # the exception — a plain required variable you generate and store yourself, outside the
 # server. See configuration_options.md (Secrets) and backup_and_restore_instructions.md
-# for how they work and the restore caveat.
-#
-# The ID portion of a magic-variable name must contain no underscores (or any other
-# non-letter): Coolify silently fails to generate the variable if it does, which is why
-# the names below squash the container-facing names (coollabsio/coolify#11043). (The
-# magic-variable token itself is intentionally not spelled out in this comment: Coolify's
-# scanner reads comment text too, and a placeholder form of it would be mis-parsed.)
+# for how they work and the restore caveat, and CONTRIBUTING.md for the naming
+# constraints that apply if you add or rename one.
 
 x-base-geovisio: &geovisio-default
   image: panoramax/api:${GEOVISIO_IMAGE_TAG:-latest}

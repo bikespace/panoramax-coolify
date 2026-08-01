@@ -91,7 +91,7 @@ Migrated from local filesystem storage to S3-compatible object storage:
 
 Variables that have no default and will cause a broken or cryptic deployment if unset are marked with `:?` in `docker-compose.yml`. Docker Compose (and Coolify) will refuse to start and report a clear error listing any missing variables, rather than silently passing empty strings into containers.
 
-Required variables: `DOMAIN`, `FS_TMP_URL`, `FS_PERMANENT_URL`, `FS_DERIVATES_URL`, `S3_PERMANENT_PUBLIC_URL`, `S3_DERIVATES_PUBLIC_URL` (plus `RESTIC_PASSWORD` and the `BACKUP_S3_*` credentials — see [Backup service implemented](#backup-service-implemented)). The application secrets (`OAUTH_CLIENT_SECRET`, `KEYCLOAK_ADMIN_PASSWORD`, `KC_DB_PASSWORD`, `PG_PASSWORD`, `FLASK_SECRET_KEY`) are **not** in this list — they are auto-generated Magic Environment Variables and carry no `:?` guard, since Coolify guarantees a value. See [Magic Environment Variables restored](#magic-environment-variables-restored--underscore-free-identifiers).
+Required variables: `DOMAIN`, `FS_TMP_URL`, `FS_PERMANENT_URL`, `FS_DERIVATES_URL`, `S3_PERMANENT_PUBLIC_URL`, `S3_DERIVATES_PUBLIC_URL` (plus `RESTIC_PASSWORD` and the `BACKUP_S3_*` credentials — see [Backup service implemented](#backup-service-implemented)). The application secrets (`OAUTH_CLIENT_SECRET`, `KEYCLOAK_ADMIN_PASSWORD`, `KC_DB_PASSWORD`, `PG_PASSWORD`, `FLASK_SECRET_KEY`) are **not** in this list — they are auto-generated Magic Environment Variables and carry no `:?` guard, since Coolify guarantees a value. See [Magic Environment Variables added](#magic-environment-variables-added).
 
 SMTP variables (`SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`, `SMTP_PASSWORD`) are left as optional bare variables — Keycloak starts without them, email just won't work until configured.
 
@@ -202,11 +202,11 @@ The restore runbook's "bring up Postgres only, then `CREATE DATABASE`" steps did
 
 ---
 
-## Magic Environment Variables restored — underscore-free identifiers
+## Magic Environment Variables added
 
-The five application secrets (`OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY`, `PG_PASSWORD`, `KC_DB_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`) are Coolify [Magic Environment Variables](https://coolify.io/docs/knowledge-base/environment-variables#magic-environment-variables): in `docker-compose.yml` each reference is `${SERVICE_PASSWORD_64_<ID>}` (no `:?` guard — Coolify guarantees a value), so Coolify auto-generates a strong 64-character value the first time the compose file is loaded instead of the operator inventing one. The `SERVICE_PASSWORD_64_*` (no-symbol) form was chosen deliberately because `PG_PASSWORD`/`KC_DB_PASSWORD` are embedded in `postgres://` and JDBC connection strings where a symbol would corrupt the URL. The container-facing env var names are unchanged, so `backup-config.sh`, `backup-db.sh`, `prune-orphan-images.sh`, and `1-init-keycloak-db.sh` still see the plain names, and `secrets.env` still stores them under those names.
+Upstream's compose file expects the operator to supply every secret by hand. Here, the five application secrets (`OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY`, `PG_PASSWORD`, `KC_DB_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`) are Coolify [Magic Environment Variables](https://coolify.io/docs/knowledge-base/environment-variables#magic-environment-variables) instead: each reference in `docker-compose.yml` is `${SERVICE_PASSWORD_64_<ID>}` (no `:?` guard — Coolify guarantees a value), so Coolify generates a strong 64-character value the first time the compose file is loaded. The `SERVICE_PASSWORD_64_*` (no-symbol) form was chosen deliberately because `PG_PASSWORD`/`KC_DB_PASSWORD` are embedded in `postgres://` and JDBC connection strings where a symbol would corrupt the URL. The container-facing env var names are unchanged, so `backup-config.sh`, `backup-db.sh`, `prune-orphan-images.sh`, and `1-init-keycloak-db.sh` still see the plain names, and `secrets.env` still stores them under those names.
 
-**The `ID` portion must contain no underscores.** This is what makes the current version work and the first attempt fail — see the history below. The mapping is:
+**The `ID` portion must contain no underscores** — Coolify silently generates nothing if it does ([coollabsio/coolify#11043](https://github.com/coollabsio/coolify/issues/11043#issuecomment-5152246623)), which is why the names below squash the container-facing ones. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) before adding or renaming one. The mapping is:
 
 | Container-facing name     | Coolify UI name                             |
 | ------------------------- | ------------------------------------------- |
@@ -220,26 +220,4 @@ The five application secrets (`OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY`, `PG_PAS
 
 Restore impact: magic vars generate on a fresh instance and will not match the backup, so `backup_and_restore_instructions.md` instructs overwriting each generated `SERVICE_PASSWORD_64_*` with the value from the recovered `secrets.env` — matched via the table above — *before* the first deploy, otherwise `keycloak-import` bakes the wrong `OAUTH_CLIENT_SECRET` into the imported realm and login fails.
 
-Related fix in the same change: the `kcadm.sh` runbook snippets in `deployment_instructions.md` and `backup_and_restore_instructions.md` now authenticate with `$KC_BOOTSTRAP_KEYCLOAK_ADMIN`/`$KC_BOOTSTRAP_KEYCLOAK_ADMIN_PASSWORD` rather than `$KEYCLOAK_ADMIN_PASSWORD`. The former are set on the `auth` service by `docker-compose.yml` itself; the latter only existed inside the container as a side effect of Coolify injecting every app-level env var into every service, and stops existing once the Coolify-side name is `SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD`.
-
-### History: why this was reverted once and then restored
-
-The magic-var approach was adopted, reverted, and then restored:
-
-1. **Adopted**, using names that mirrored the container-facing ones — `SERVICE_PASSWORD_64_OAUTH_CLIENT_SECRET`, `SERVICE_PASSWORD_64_PG_PASSWORD`, and so on. Coolify generated nothing, every reference resolved empty, and `db` failed to start with "POSTGRES_PASSWORD could not be an empty value."
-2. **Reverted** (commit `671dcb1e`) to plain `${VAR:?}` variables, on the diagnosis that Coolify does not generate magic environment variables for a compose app deployed from a git repository ([coollabsio/coolify#4646](https://github.com/coollabsio/coolify/issues/4646)), which this deployment always is.
-3. **Restored**, once that diagnosis turned out to be wrong. The actual cause is that the `ID`/`IDENTIFIER` portion of a magic-variable name may not contain underscores — Coolify silently generates nothing when it does. Removing the underscores makes generation work from a git-sourced compose app, confirmed in [coollabsio/coolify#11043](https://github.com/coollabsio/coolify/issues/11043#issuecomment-5152246623). Coolify's docs note the underscore restriction only for the port-carrying form of magic variables, not the general case. Assume `[a-zA-Z]` are the only safe `ID` characters when adding new ones.
-
-### Migrating a running instance
-
-An instance already deployed with the plain `${VAR:?}` variables must not simply be redeployed: Coolify generates the magic vars when the new compose file is loaded, and those fresh values will not match the live Postgres roles, the imported Keycloak realm, or the bootstrapped admin account.
-
-1. **Record the current values.** Copy `OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY`, `PG_PASSWORD`, `KC_DB_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD` out of the Coolify Environment Variables UI into a password manager. (They are also in the latest restic `config` snapshot's `secrets.env`, but do not rely on that as the only copy.)
-2. **Load the new compose without deploying.** Point the Coolify app at the commit carrying this change and save/reload the compose configuration. Coolify creates the five `SERVICE_PASSWORD_64_*` rows with freshly generated values. **Do not deploy yet.**
-3. **Overwrite each generated value** with the matching recorded one, using the mapping table above. Double-check every paste — a wrong `PG_PASSWORD` stops the API connecting, and a wrong `OAUTH_CLIENT_SECRET` breaks login against the already-imported realm.
-4. **Redeploy and verify**: all services healthy, `migrations` exited 0, login through Keycloak works, admin console login at `<DOMAIN>/oauth/admin` works.
-5. **Delete the five old plain variables** from the Coolify UI — only after step 4 passes. Leave `RESTIC_PASSWORD` and the `BACKUP_S3_*` variables alone.
-6. **Redeploy again and re-verify.** Coolify injects app-level env vars into *all* services, so until step 5 the old rows were still present in every container; this pass is what proves nothing was still reading them.
-7. **Run a one-off config backup** (`backup_and_restore_instructions.md` §7.7) so `secrets.env` reflects the post-migration state.
-
-If step 4 fails, revert to the plain-variable compose and redeploy — the old rows are still present until step 5. If a value was lost, recover via the rotation procedures: `ALTER USER gvs`/`ALTER USER keycloak_user` (§7.3), Keycloak client-secret resync (§7.2), admin password reset (§7.4).
+The `kcadm.sh` runbook snippets in `deployment_instructions.md` and `backup_and_restore_instructions.md` authenticate with `$KC_BOOTSTRAP_KEYCLOAK_ADMIN`/`$KC_BOOTSTRAP_KEYCLOAK_ADMIN_PASSWORD` rather than `$KEYCLOAK_ADMIN_PASSWORD`, because those are the names `docker-compose.yml` sets on the `auth` service itself. `$KEYCLOAK_ADMIN_PASSWORD` only ever existed inside that container as a side effect of Coolify injecting every app-level env var into every service, and stops existing once the Coolify-side name is `SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD`.
