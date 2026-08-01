@@ -150,7 +150,7 @@ Every environment variable is configured directly in the Coolify UI, in the Envi
 
 See [`configuration_options.md`](./configuration_options.md) for the full list of variables, which ones are required, and what each one does.
 
-The six secrets (`OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY`, `PG_PASSWORD`, `KC_DB_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`, `RESTIC_PASSWORD`) have no meaningful default — generate a value for each yourself and enter it by hand before deploying (see [configuration_options.md → Secrets](./configuration_options.md#secrets) for the generator one-liner). Coolify's Magic Environment Variables would normally auto-generate secrets like these, but that feature doesn't work when a compose app is deployed from a git repository, as this one is — see [coollabsio/coolify#4646](https://github.com/coollabsio/coolify/issues/4646) — so this deployment does not rely on it. If you are *restoring* rather than deploying fresh, enter the recovered values from your backup instead of generating new ones — see the restore runbook.
+Five of the application secrets (`OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY`, `PG_PASSWORD`, `KC_DB_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`) are Coolify Magic Environment Variables — Coolify auto-generates them the first time the compose file is loaded, so you don't set them by hand on a fresh install. They appear in the UI under their `SERVICE_PASSWORD_64_*` names; see [configuration_options.md → Secrets](./configuration_options.md#secrets) for the name mapping. The exception is `RESTIC_PASSWORD`, which you must generate and record yourself (see [configuration_options.md → Backup destination](./configuration_options.md#backup-destination)). If you are *restoring* rather than deploying fresh, the auto-generated secrets must instead be overwritten with your recovered values before the first deploy — see the restore runbook.
 
 > **Recommended: pin your image versions.** The Panoramax API and website images default to the `latest` tag (`GEOVISIO_IMAGE_TAG` and `WEBSITE_IMAGE_TAG` — see [configuration_options.md](./configuration_options.md)). `latest` always pulls the newest release, which means a redeploy can silently bring in a changed image you didn't intend to test. For reproducible, controlled upgrades — and so you decide *when* to move to a new version — set both variables to a specific released version (e.g. `2.7.0`) rather than leaving them on `latest`, and bump them deliberately when you're ready to upgrade.
 
@@ -184,7 +184,7 @@ Two cases still need a manual step:
 ```bash
 docker exec -it <auth_container_name> sh -c '
 /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/oauth --realm master \
-  --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD"
+  --user "$KC_BOOTSTRAP_KEYCLOAK_ADMIN" --password "$KC_BOOTSTRAP_KEYCLOAK_ADMIN_PASSWORD"
 /opt/keycloak/bin/kcadm.sh update realms/master \
   -s bruteForceProtected=true -s permanentLockout=false -s failureFactor=10
 '
@@ -205,7 +205,7 @@ Or apply the last two via `kcadm.sh` (reusing the credential-login pattern above
 ```bash
 docker exec -it <auth_container_name> sh -c '
 /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/oauth --realm master \
-  --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD"
+  --user "$KC_BOOTSTRAP_KEYCLOAK_ADMIN" --password "$KC_BOOTSTRAP_KEYCLOAK_ADMIN_PASSWORD"
 CID=$(/opt/keycloak/bin/kcadm.sh get clients -r geovisio -q clientId=geovisio --fields id --format csv --noquotes | tail -1)
 /opt/keycloak/bin/kcadm.sh update clients/$CID -r geovisio -s fullScopeAllowed=false
 /opt/keycloak/bin/kcadm.sh update realms/geovisio -s revokeRefreshToken=true
