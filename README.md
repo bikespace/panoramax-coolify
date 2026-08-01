@@ -32,15 +32,14 @@ See `CHANGELOG.md` for a summary of changes made relative to the upstream exampl
 
 ```bash
 grep -v 'exclude_from_hc' docker/full-keycloak-auth/docker-compose.yml | \
-  DOMAIN=x OAUTH_CLIENT_SECRET=x KC_DB_PASSWORD=x KEYCLOAK_ADMIN_PASSWORD=x PG_PASSWORD=x \
-  FLASK_SECRET_KEY=x S3_DERIVATES_PUBLIC_URL=x S3_PERMANENT_PUBLIC_URL=x \
+  DOMAIN=x S3_DERIVATES_PUBLIC_URL=x S3_PERMANENT_PUBLIC_URL=x \
   FS_TMP_URL=x FS_PERMANENT_URL=x FS_DERIVATES_URL=x \
   BACKUP_S3_ENDPOINT=x BACKUP_S3_BUCKET=x BACKUP_S3_ACCESS_KEY=x BACKUP_S3_SECRET_KEY=x \
   RESTIC_PASSWORD=x \
   docker compose -f - config -q
 ```
 
-No output and a zero exit code means the file is valid.
+No output and a zero exit code means the file is valid. The `SERVICE_PASSWORD_64_*` secrets aren't listed because they carry no `:?` guard — Coolify fills them in, and locally they resolve to empty strings without failing the parse.
 
 ---
 
