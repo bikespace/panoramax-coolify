@@ -1,6 +1,6 @@
 # panoramax-coolify
 
-Deployment files for running [Panoramax](https://panoramax.fr) on [Coolify](https://coolify.io), based on the [`docker/full-keycloak-auth`](https://gitlab.com/panoramax/server/api/-/tree/develop/docker/full-keycloak-auth) example from the upstream [panoramax/server/api](https://gitlab.com/panoramax/server/api) repository.
+Deployment files for running [Panoramax](https://panoramax.fr) on [Coolify](https://coolify.io), based on the [`docker/full-keycloak-auth`](https://gitlab.com/panoramax/server/api/-/tree/main/docker/full-keycloak-auth) example from the upstream [panoramax/server/api](https://gitlab.com/panoramax/server/api) repository.
 
 The deployment runs:
 - **Panoramax API** (pre-built image from [Docker Hub](https://hub.docker.com/r/panoramax/api))

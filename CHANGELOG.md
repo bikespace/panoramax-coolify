@@ -1,6 +1,8 @@
 # Changelog
 
-All changes relative to the upstream [`docker/full-keycloak-auth`](https://gitlab.com/panoramax/server/api/-/tree/develop/docker/full-keycloak-auth) example.
+How this repository differs from the upstream [`docker/full-keycloak-auth`](https://gitlab.com/panoramax/server/api/-/tree/main/docker/full-keycloak-auth) example on `main`.
+
+This is a description of the current state, not a history of commits: each divergence appears once, in the section it belongs to.
 
 ---
 
@@ -8,7 +10,7 @@ All changes relative to the upstream [`docker/full-keycloak-auth`](https://gitla
 
 **`docker-compose.yml`** — replaced the `x-base-geovisio` build anchor (which pointed at the API source tree) with `image: panoramax/api:${GEOVISIO_IMAGE_TAG:-latest}`. This decouples the deployment repo from the API source code so it can be maintained independently. The image is published to [Docker Hub](https://hub.docker.com/r/panoramax/api).
 
-**`env.example`** — uncommented and clarified `GEOVISIO_IMAGE_TAG` so operators can pin to a specific release.
+`WEBSITE_IMAGE_TAG` was introduced as a separate variable from `GEOVISIO_IMAGE_TAG` — the website image is on Docker Hub and needs its own tag; using one variable for both produced incorrect image references when deploying a non-DockerHub API image.
 
 ---
 
@@ -17,33 +19,37 @@ All changes relative to the upstream [`docker/full-keycloak-auth`](https://gitla
 Coolify has several constraints that differ from plain Docker Compose:
 
 - **Named networks removed** — Coolify does not support custom named networks in compose files; the default bridge network is used instead.
-- **`deploy.replicas` replaced with explicit services** — Coolify ignores `deploy.replicas`, so the single `background-worker` service with `deploy.replicas: 4` was replaced with four explicitly named services (`background-worker-1` through `background-worker-4`).
-- **Bind mounts replaced with baked-in files** — Coolify resolves bind mount paths relative to the Docker host, not the helper container, so files that were bind-mounted into images (`nginx.conf`, `robots.txt`, `1-init-keycloak-db.sh`, `keycloak-realm.json`) are now copied into their respective images at build time via the Dockerfiles.
-- **`restart: no` on migrations** — Coolify injects `restart: unless-stopped` on all services; without an explicit override the `migrations` service (which exits 0 on success) would restart in a tight loop.
-- **Image tag conflict resolved** — removed the named `panoramax/api:local` tag from the build anchor; BuildKit was persisting the tag across Coolify redeployments and causing conflicts.
-- **Traefik labels added** — internal services (`auth`, `api`, `background-worker-*`) have `traefik.enable=false` so Coolify/Traefik does not try to route public traffic directly to them; all external traffic flows through nginx.
-- **`exclude_from_hc: true`** on `migrations` and `background-worker-*` — tells Coolify not to include these services in its deployment health gate (migrations exits intentionally; workers have no HTTP health endpoint).
+- **`deploy.replicas` replaced with explicit services** — Coolify ignores `deploy.replicas`, so upstream's single `background-worker` with `replicas: ${PICTURE_WORKERS_REPLICATS:-5}` was replaced with four explicitly named services (`background-worker-1` … `-4`) sharing a `&worker-default` anchor. `PICTURE_WORKERS_REPLICATS` no longer applies; change the worker count by adding or removing numbered services.
+- **Bind mounts replaced with baked-in files** — Coolify resolves bind mount paths relative to the Docker host, not the helper container, so files that upstream bind-mounts (`nginx.conf`, `robots.txt`, `1-init-keycloak-db.sh`, `keycloak-realm.json`) are copied into their images at build time. This adds `Dockerfile.nginx` and `Dockerfile.postgres` (replacing the `nginx:*` and `postgis/postgis:16-3.4` image references) and two `COPY` lines in `Dockerfile.keycloak`. A `.dockerignore` keeps docs and secrets out of the build contexts.
+- **`restart: "no"` on one-shot services** — Coolify injects `restart: unless-stopped` on every service; without an explicit override, `migrations` and `keycloak-import` (both of which exit 0 on success) would restart in a tight loop.
+- **`exclude_from_hc: true`** on `migrations`, `keycloak-import`, `keycloak-export`, `backup`, and the workers — tells Coolify not to include them in its deployment health gate (the one-shot jobs exit intentionally; the others have no HTTP endpoint).
+- **Traefik labels** — `traefik.enable=false` on `auth`, `api`, `keycloak-export`, and the workers so Coolify/Traefik does not route public traffic directly to them; all external traffic flows through nginx.
+- **`INFRA_NB_PROXIES` default raised to 2** — Traefik (Coolify) and nginx both sit in front of the API, so two proxy hops must be declared for Flask to trust the correct `X-Forwarded-For` for URL generation and rate limiting.
 
 ---
 
-## Nginx and proxy fixes
+## Nginx and reverse proxy
 
-- **Port 80** — changed nginx from port 8080 to port 80 so Traefik's default routing works without configuration.
-- **Host port binding removed from `reverseproxy`** — Traefik routes to the internal port; exposing it on the host caused conflicts.
-- **RFC 7239 `Forwarded` header stripped** — Traefik sets the `Forwarded` header (RFC 7239) but without a port, which caused Keycloak's `ForwardedHeadersParser` to log errors and misidentify the request origin. nginx now strips it before forwarding to Keycloak: `proxy_set_header Forwarded "";`
-- **`Host` header added to `/oauth` proxy block** — ensures Keycloak sees the correct hostname when constructing redirect URLs.
-- **`reverseproxy` healthcheck added** — Coolify needs a health signal before marking the stack healthy.
-- **`website` healthcheck added** — `curl -sf http://localhost:3000` so Coolify can gate on the frontend being ready.
+- **Port 80** — nginx listens on 80 instead of 8080, and `reverseproxy`'s fixed `8080:8080` host mapping became a bare `- 80`, so Traefik's default routing works with no extra configuration. (This is the only service still publishing a host port; it is the Coolify/Traefik ingress.)
+- **RFC 7239 `Forwarded` header stripped** — Traefik sets `Forwarded` without a port, which Keycloak 26's `ForwardedHeadersParser` fails to parse, misidentifying the request origin. nginx sends `proxy_set_header Forwarded "";` and Keycloak uses `X-Forwarded-*` instead.
+- **`Host` header added to the `/oauth` block** — so Keycloak sees the real hostname when constructing redirect URLs, asset paths, and CSP headers.
+- **Security response headers** — `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Strict-Transport-Security: max-age=31536000` on the `/api` and website routes. Not on `/oauth`, where Keycloak manages its own. No `X-Frame-Options`/`frame-ancestors` — the Panoramax viewer stays embeddable — and no `limit_req`, so CLI bulk uploads are never throttled (login brute-force is covered by Keycloak).
+- **`/permanent/` and `/derivates/` blocks removed** — upstream served pictures from a local `pic_data` volume through these locations and a UUID-to-path rewrite. With S3 storage, clients fetch those paths directly from S3, so the blocks and the rewrite are gone.
+- **Healthchecks added** to `reverseproxy` (`curl -sf http://localhost/api`) and `website` (`curl -sf http://localhost:3000`) so Coolify can gate on them being ready.
 
 ---
 
-## Keycloak 26.x compatibility
+## Keycloak: import, export, and health
 
-- **Admin bootstrap variable names updated** — Keycloak 26 renamed the bootstrap admin credentials from `KEYCLOAK_ADMIN`/`KEYCLOAK_ADMIN_PASSWORD` to `KC_BOOTSTRAP_KEYCLOAK_ADMIN`/`KC_BOOTSTRAP_KEYCLOAK_ADMIN_PASSWORD`. Updated to match upstream; the `.env` variable names (`KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD`) are unchanged.
-- **`KC_HOSTNAME_PATH: /oauth`** — tells Keycloak it is deployed under the `/oauth` path prefix so it generates correct redirect URLs and asset paths through nginx.
-- **`KC_HTTP_MANAGEMENT_HEALTH_ENABLED: "true"`** — enables Keycloak's management health endpoint on port 9000, required for the healthcheck probe.
-- **Auth healthcheck updated** — Keycloak 26's management health endpoints are not reliably available in this build configuration. The healthcheck now hits `/oauth/realms/master` over HTTP/1.0, which proves the database is up, the realm is loaded, and Keycloak is serving requests.
-- **Login theme fixed** — the `geovisio` Keycloak client had `loginTheme: "base"` which rendered an unstyled login page. Corrected to `"keycloak"`.
+- **Realm import split into a one-shot `keycloak-import` service** — upstream runs `start --optimized --import-realm` on `auth`. That flag triggers Keycloak's own internal restart once import completes, and on a fresh deploy the restart can happen before the import's DB write commits, so the next boot finds no realm and imports again, forever. `keycloak-import` now runs `kc.sh import --optimized --file …/geovisio_realm.json --override false` once against the DB (`restart: "no"`), and `auth` starts with plain `start --optimized`. Both `auth` and `keycloak-export` gate on `service_completed_successfully`. `--file` points at the realm JSON directly; `--dir` only logged a directory scan and never actually imported it.
+- **`auth` healthcheck is a bare TCP connect** to port 8080. Upstream probes `/oauth/health/ready` on the management port; those endpoints are not reliably available in this build, and a request-level check only passes once realm import finishes — long enough that Coolify's restart supervisor killed the container first, looping indefinitely. This is a liveness check, not readiness: dependents may see a few seconds of 503s right after `auth` is marked healthy.
+- **`KC_HOSTNAME_PATH: /oauth`** — tells Keycloak it is served under the `/oauth` prefix so redirect URLs and asset paths are correct behind nginx.
+- **`KC_HTTP_MANAGEMENT_HEALTH_ENABLED: "true"`** — enables the management health endpoint on port 9000. Retained for manual diagnostics; the healthcheck no longer depends on it.
+- **`keycloak-export` sidecar** — replaces what would otherwise be a manual Coolify Scheduled Task. `keycloak-export-loop.sh` (baked into `Dockerfile.keycloak`) runs `kc.sh export --optimized --dir /export --users realm_file --realm geovisio` at startup and every `KC_EXPORT_INTERVAL_SECONDS` (default daily), writing to the `kc_export` volume that `backup-config.sh` ships. `kc.sh export` reads Postgres directly and needs no live HTTP server, so it runs as its own container with only the DB env vars.
+  - `--optimized` is required: plain `kc.sh export` re-augments the Quarkus build config at runtime, and since `KC_DB=postgres` is a build-time property not set as a runtime env var here, that silently dropped the JDBC driver config and broke every export.
+  - The loop **retries in place every 30s** rather than exiting. Without it, an export that ran before the realm existed — or that raced `auth` over Liquibase's changelog table on a fresh schema — would exit under `set -eu` and restart the whole container, booting a second JVM against the same DB on every retry.
+  - Runs as `user: "0:0"` — the `kc_export` named volume is root-owned and the Keycloak image runs as uid 1000. The container listens on no port and only invokes the CLI, so the tradeoff is low-risk.
+- **A dedicated Keycloak container was necessary** rather than folding the export into the Alpine `backup` sidecar: `kc.sh export` needs the full glibc-based Keycloak/Quarkus runtime.
 
 ---
 
@@ -51,162 +57,71 @@ Coolify has several constraints that differ from plain Docker Compose:
 
 Migrated from local filesystem storage to S3-compatible object storage:
 
-- Replaced the single `FS_URL` environment variable with three separate variables: `FS_TMP_URL`, `FS_PERMANENT_URL`, and `FS_DERIVATES_URL`, allowing each storage tier to be pointed at a different bucket or prefix.
-- Added `S3_PERMANENT_PUBLIC_URL` and `S3_DERIVATES_PUBLIC_URL` for serving pictures directly from S3 without proxying through the API.
-- Removed local volume mounts for picture storage from the nginx and API services.
-- **nginx `/permanent/` and `/derivates/` location blocks removed** — the upstream config served pictures directly from a local `pic_data` volume via these location blocks. With S3 storage those paths are handled by clients going directly to S3 via `S3_PERMANENT_PUBLIC_URL`/`S3_DERIVATES_PUBLIC_URL`, so the blocks and their UUID-to-path rewrite rule are not needed.
-- **`FS_URL` explicitly blanked in compose** — the pre-built `panoramax/api` image has `ENV FS_URL="/data/geovisio"` baked in. Setting `FS_URL: ""` in the `migrations`, `api`, and `background-worker-*` environment blocks overrides it so the split S3 variables are used instead.
+- Replaced the single `FS_URL` with `FS_TMP_URL`, `FS_PERMANENT_URL`, and `FS_DERIVATES_URL`, so each storage tier can point at a different bucket or prefix.
+- Added `S3_PERMANENT_PUBLIC_URL` and `S3_DERIVATES_PUBLIC_URL` (feeding `API_*_PICTURES_PUBLIC_URL`, which upstream sets to the local `/permanent` and `/derivates` paths) so pictures are served straight from S3 without proxying through the API.
+- Removed the `pic_data` volume and its mounts from nginx, `api`, and the workers.
+- **`FS_URL` explicitly blanked** — the pre-built `panoramax/api` image bakes in `ENV FS_URL="/data/geovisio"`. A shared `x-base-geovisio-env` anchor sets `FS_URL: ""` on `migrations`, `api`, and the workers so the split S3 variables are used instead.
+- **`&acl=public-read`** is documented on the public-bucket storage URLs, so uploads are readable without a bucket policy — needed on providers that do not support them. `backup/fix-object-acls.sh` backfills existing objects.
+- **`OAUTH_PROFILE_USE_IFRAME: True` removed** from the `api` service.
 
 ---
 
 ## Keycloak realm hardening
 
-- **Self-registration disabled** — `registrationAllowed: false` in the realm config; accounts must be created by an admin.
-- **Email verification required** — `verifyEmail: true` added to the realm config.
-- **`API_REGISTRATION_IS_OPEN`** — added to `docker-compose.yml` and `env.example` (defaults to `False`) to surface the registration policy in the website UI and federation metadata.
-- **Brute-force detection enabled** — `bruteForceProtected: true` with `failureFactor: 10` (temporary lockout; `permanentLockout` kept `false` so an attacker can't lock a known user out permanently). Previously off, allowing unlimited online password guessing against the public login.
-- **Password policy added** — `passwordPolicy: "length(12) and notUsername(undefined)"`; previously there was no policy, so a user could set a 1-character password.
-- **Direct access grant disabled on the `geovisio` client** — `directAccessGrantsEnabled: false`. The API and CLI use the authorization-code flow plus bearer API tokens, not the password grant, so this removes an unused headless brute-force channel with no functional impact. (`admin-cli` keeps it.)
-- **Applies to fresh deploys only** — the realm import runs `--override false`, so these do not retroactively update an already-running `geovisio` realm, and the `master` realm (admin console) is never covered by the import. Both are handled via the manual steps documented in [`deployment_instructions.md` §6.1](./deployment_instructions.md#61-keycloak-realm-hardening).
+Changes to `keycloak-realm.json`:
+
+- **Self-registration disabled** — `registrationAllowed: false`; accounts must be created by an admin. `API_REGISTRATION_IS_OPEN` (hardcoded `True` upstream) is now a variable defaulting to `False`, so the website UI and federation metadata agree with the realm.
+- **Email verification required** — `verifyEmail: true`.
+- **Brute-force detection enabled** — `bruteForceProtected: true` with `failureFactor` lowered from 30 to 10 (temporary lockout; `permanentLockout` stays `false` so an attacker cannot lock out a known user permanently). Previously off, allowing unlimited online password guessing.
+- **Password policy added** — `length(12) and notUsername(undefined)`; previously there was none, so a 1-character password was accepted.
+- **Direct access grant disabled on the `geovisio` client** — the API and CLI use the authorization-code flow plus bearer API tokens, not the password grant, so this removes an unused headless brute-force channel with no functional impact. (`admin-cli` keeps it.)
+- **Least-privilege token scope** — `fullScopeAllowed: false` on `geovisio` (the only client in the realm still `true`). Panoramax reads identity from the `profile`/`email` scopes and authorizes in its own DB, so logins, the API, and CLI uploads are unaffected.
+- **Refresh-token rotation** — `revokeRefreshToken: true` with `refreshTokenMaxReuse: 0` makes each refresh token single-use, limiting replay of a stolen one.
+- **Login theme fixed** — the `geovisio` client had `loginTheme: "base"`, which rendered an unstyled login page; corrected to `"keycloak"`.
+
+**These apply to fresh deploys only.** The import runs `--override false`, so it will not retroactively update a running `geovisio` realm, and the `master` realm (admin console) is never covered by the import. Manual admin-console / `kcadm.sh` steps for an existing instance are in [`deployment_instructions.md` §6.1](./deployment_instructions.md#61-keycloak-realm-hardening).
 
 ---
 
-## Network exposure and supply-chain hardening
+## Network exposure and supply chain
 
-- **Internal services no longer published to the host** — removed the `ports:` mappings from `db`, `api`, and `website` in `docker-compose.yml`. The short `- <n>` form publishes to `0.0.0.0` on a random host port, which bypassed the reverse proxy and exposed a superuser Postgres (`gvs`) and the un-fronted API/website directly on the host network. All three are still reachable by service name over the compose network (`db:5432`, `api:5000`, `website:3000`), which is how nginx and the other services already reach them; `docker exec` remains the debugging path. `reverseproxy`'s host port is kept — it is the Traefik/Coolify ingress.
-- **supercronic download checksum-verified** — `backup/Dockerfile` now downloads the pinned `v0.2.33` binary to a temp path and verifies it against the SHA1 published on the upstream release (`71b0d58c…`) before installing, so the build fails closed on a hash mismatch. Previously the binary was fetched and run with no integrity check, inside the container that holds every app secret and both S3 key sets. (aptible/supercronic publishes only SHA1, not SHA256.)
-- **nginx base image refreshed** — `Dockerfile.nginx` bumped from `nginx:1.25.5` (early 2024) to `nginx:1.27.5` to clear accrued CVEs. Config-compatible; no `nginx.conf` changes.
-- **Image-pinning guidance added** — `deployment_instructions.md` §4 now recommends operators pin `GEOVISIO_IMAGE_TAG`/`WEBSITE_IMAGE_TAG` to a specific released version rather than the default `latest`, for reproducible and controlled upgrades. The defaults remain `latest` so the images stay user-configurable.
-- **Restore runbook no longer leaves secrets in world-readable `/tmp`** — the disaster-recovery runbook (`backup_and_restore_instructions.md` §6) previously restored `secrets.env` — every app secret in plaintext — into `/tmp/restore` and never removed it, so on a multi-user host any local user could read it and the file lingered after recovery. It now restores into a private `~/panoramax-restore` (`chmod 700`) and `shred`s/removes the file once the values are copied into Coolify; the in-container DB dumps are likewise cleaned up after `pg_restore`.
-- **Backup docs corrected to `sync`** — `backup_architecture.md` (and the §8 operating note in the restore doc) described the image backup as `rclone copy` ("never deletes from the backup") and called that "load-bearing," but `backup-images.sh` actually runs `rclone sync` (deletions propagate). The docs now match the code: `sync` mirrors production, and the backup bucket's object-versioning + 30-day lifecycle rule is the deletion safety net. This corrected a misstated recovery guarantee.
-- **nginx security response headers** — `nginx.conf` now sets `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Strict-Transport-Security: max-age=31536000` on the website and `/api` routes (not on `/oauth`, where Keycloak manages its own headers). No `X-Frame-Options`/`frame-ancestors` — the Panoramax viewer stays embeddable — and no `limit_req` rate limiting, so CLI bulk uploads are never throttled (login brute-force is already covered by Keycloak).
-- **Least-privilege client token scope** — `fullScopeAllowed: false` on the `geovisio` client (it was the only client in the realm still `true`). Tokens now carry a mapped subset of roles instead of the user's full role set. Panoramax reads identity from the `profile`/`email` scopes and does authorization in its own DB, so logins, the API, and CLI uploads are unaffected.
-- **Refresh-token rotation enabled** — `revokeRefreshToken: true` (with `refreshTokenMaxReuse: 0`) makes each refresh token single-use, limiting replay of a stolen refresh token.
-- **These realm changes apply to fresh deploys only** — like the earlier realm hardening, the `--override false` import won't retroactively update a running `geovisio` realm; manual admin-console / `kcadm.sh` steps are documented in [`deployment_instructions.md` §6.1(b)](./deployment_instructions.md#61-keycloak-realm-hardening).
-- **Corrected the `kcadm.sh` server URL in all runbooks** — every `kcadm.sh config credentials` example used `--server http://localhost:8080`, but Keycloak serves under the `/oauth` base path in this deployment (`KC_HTTP_RELATIVE_PATH=/oauth` in `Dockerfile.keycloak`), so the root path returned `404 Not Found`. Fixed all five occurrences (across `deployment_instructions.md` and `backup_and_restore_instructions.md`) to `--server http://localhost:8080/oauth`.
+- **Internal services no longer published to the host** — removed the `ports:` mappings from `db`, `api`, and `website`. The short `- <n>` form publishes to `0.0.0.0` on a random host port, which bypassed the reverse proxy and exposed a superuser Postgres (`gvs`) and the un-fronted API/website directly on the host network. All three are still reachable by service name over the compose network (`db:5432`, `api:5000`, `website:3000`), which is how nginx and the other services already reach them; `docker exec` remains the debugging path.
+- **supercronic download checksum-verified** — `backup/Dockerfile` fetches the pinned `v0.2.33` binary to a temp path and checks it against the SHA1 published on the upstream release (`71b0d58c…`) before installing, so the build fails closed on a mismatch. Previously it was fetched and run with no integrity check, inside the container that holds every app secret and both S3 key sets. (aptible/supercronic publishes only SHA1.)
+- **nginx base image refreshed** — `nginx:1.25.5` (early 2024) → `nginx:1.27.5` to clear accrued CVEs. Config-compatible.
+- **Image-pinning guidance** — `deployment_instructions.md` §4 recommends pinning `GEOVISIO_IMAGE_TAG`/`WEBSITE_IMAGE_TAG` to a released version rather than `latest`. The defaults remain `latest` so the images stay user-configurable.
 
 ---
 
-## Required variable enforcement
+## Backup and restore subsystem
 
-Variables that have no default and will cause a broken or cryptic deployment if unset are marked with `:?` in `docker-compose.yml`. Docker Compose (and Coolify) will refuse to start and report a clear error listing any missing variables, rather than silently passing empty strings into containers.
+Upstream has no backup story. This repo adds one, described in [`backup/backup_architecture.md`](./docker/full-keycloak-auth/backup/backup_architecture.md) (how the code works) and [`backup_and_restore_instructions.md`](./backup_and_restore_instructions.md) (how to operate it).
 
-Required variables: `DOMAIN`, `FS_TMP_URL`, `FS_PERMANENT_URL`, `FS_DERIVATES_URL`, `S3_PERMANENT_PUBLIC_URL`, `S3_DERIVATES_PUBLIC_URL` (plus `RESTIC_PASSWORD` and the `BACKUP_S3_*` credentials — see [Backup service implemented](#backup-service-implemented)). The application secrets (`OAUTH_CLIENT_SECRET`, `KEYCLOAK_ADMIN_PASSWORD`, `KC_DB_PASSWORD`, `PG_PASSWORD`, `FLASK_SECRET_KEY`) are **not** in this list — they are auto-generated Magic Environment Variables and carry no `:?` guard, since Coolify guarantees a value. See [Magic Environment Variables added](#magic-environment-variables-added).
-
-SMTP variables (`SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`, `SMTP_PASSWORD`) are left as optional bare variables — Keycloak starts without them, email just won't work until configured.
-
----
-
-## Miscellaneous
-
-- **`WEBSITE_IMAGE_TAG`** introduced as a separate variable from `GEOVISIO_IMAGE_TAG` — the website image is on Docker Hub and needs its own tag; using the same variable caused incorrect image references when deploying non-DockerHub API images.
-- **`INFRA_NB_PROXIES=2`** set explicitly — with both Traefik (Coolify) and nginx in the request path before the API, two proxy hops must be declared so Flask trusts the correct `X-Forwarded-For` header for URL generation and rate limiting.
-- **`KC_DB_PASSWORD`** parameterised — replaced a hardcoded password in `1-init-keycloak-db.sh` and `docker-compose.yml` with the `KC_DB_PASSWORD` environment variable.
-- **`VITE_TITLE`, `VITE_META_TITLE`, `VITE_META_DESCRIPTION`** — made configurable via environment variables with sensible defaults, instead of being hardcoded in the compose file.
-- **`INSTANCE_NAME` defaults aligned** — the website's `VITE_INSTANCE_NAME` fell back to `A geovisio instance` while the API's `API_SUMMARY` fell back to `A Panoramax instance`. An operator who left the variable unset got a different name in the site header than in the API summary and federation metadata. Both now default to `A Panoramax instance`.
+- **New `backup/` directory** — `Dockerfile` (Alpine + restic, rclone, `postgresql16-client`, supercronic), `entrypoint.sh` (renders the cron schedule from env vars via `envsubst`), `crontab.template`, and the scripts: `backup-db.sh`, `backup-images.sh`, `backup-config.sh`, `backup-healthcheck.sh`, `restic-check.sh`, plus the manually-invoked `backup-now.sh` (one-off full run), `prune-orphan-images.sh` (deletes production HD files with no DB row), and `fix-object-acls.sh` (sets `public-read` per object on providers without bucket policies).
+- **`docker-compose.yml`** — added the `backup` service (restic repository derived from `BACKUP_S3_*`, reusing the app secrets rather than re-entering them), a `backup_scratch` volume for working files, and a `kc_export` volume mounted read-only for the Keycloak realm snapshot. Its healthcheck (`backup-healthcheck.sh`, 1h interval, 26h start period) reports stale backups.
+- **What is backed up** — Postgres dumps (geovisio + keycloak schemas) and secrets encrypted with restic; permanent HD pictures mirrored S3-to-S3 with rclone; the Keycloak realm export as a portable recovery artefact. Derivates are deliberately excluded and regenerated on restore.
+- **`restic init` is automatic** — `entrypoint.sh` detects an uninitialized repo and initializes it, instead of requiring a manual first-run step that a fresh deploy would otherwise crash-loop on every night.
+- **supercronic runs with `-no-reap`** — its zombie-reaping activates when it detects PID 1 and crashed on startup before any job ran, restarting the container in a tight loop. Docker's own init (`init: true`, tini) handles reaping.
+- **rclone connection strings quote `endpoint`/`region`** — rclone's inline connection-string syntax uses `:` as the remote/path separator, so an unquoted `endpoint=https://host` parsed as an "unsupported protocol scheme" error. `backup-images.sh` runs with `-v` as well, since rclone's default log level suppresses the final transfer-stats line and a clean nightly run otherwise produced no output at all.
+- **Documentation corrections** carried into the runbooks: the image backup is `rclone sync`, not `copy` (deletions propagate; the backup bucket's object-versioning plus 30-day lifecycle rule is the safety net, and the docs previously stated the opposite guarantee); the restore procedure uses `pg_restore --clean --if-exists` because `migrations` and `keycloak-import` create empty schemas before a restore lands; the restore no longer leaves plaintext `secrets.env` in world-readable `/tmp` (it uses a `chmod 700` private directory and `shred`s the file afterwards); and every `kcadm.sh --server` example points at `http://localhost:8080/oauth`, since Keycloak serves under that base path here and the root path 404s.
 
 ---
 
-## Faster shutdown / redeploys
+## Faster shutdown and redeploys
 
-Stopping the stack — and the "Removing old containers" step of a Coolify redeploy — took ~3 minutes.
+Stopping the stack took ~3 minutes; it now takes ~9s.
 
-**What was happening.** `docker events` during a redeploy showed Coolify stops the old containers **strictly serially** (one dies, then the next), each with a `SIGTERM` followed by `SIGKILL` after a grace period. Most services exit within a couple of seconds (`db` fast-shuts-down on `SIGINT`, nginx/website/auth/backup all stop promptly, and `keycloak-export` once its loop was fixed — see below). But the **four picture workers and `api` ignore `SIGTERM` entirely** — they were observed dying at *exactly* the grace ceiling on every redeploy — so each sat out the full timeout before being `SIGKILL`ed. Serial teardown makes those waits fully additive, so those five containers accounted for essentially the whole window.
+- **`stop_signal: SIGKILL` on `api` and the worker anchor.** Coolify stops a compose project's containers strictly serially, and these five ignore `SIGTERM` — they were observed dying at exactly the grace ceiling on every redeploy, making the waits fully additive. Sending `SIGKILL` up front is safe: picture jobs live in a DB-backed queue so a killed worker's job stays pending and is reprocessed, and `api` does no in-process picture processing (`PICTURE_PROCESS_THREADS_LIMIT: 0`), has no live requests once `reverseproxy` stops first, rolls back killed transactions atomically, and leaves any orphaned temp upload to the existing orphan-prune.
+- **`keycloak-export-loop.sh` traps `SIGTERM`/`SIGINT`** — as PID 1, a shell blocked in a foreground `sleep` never saw the signal and always burned the full grace period. It now runs `sleep … & wait $!` so shutdown interrupts it immediately.
 
-**Fixes.**
-
-- **`stop_signal: SIGKILL` on the `background-worker` anchor (inherited by all four workers) and `api`.** Since these already ignore `SIGTERM` and are always `SIGKILL`ed after a pointless wait, sending `SIGKILL` up front makes them die instantly instead. This cut the "Removing old containers" step to **~9s**. Safe to hard-kill: picture jobs live in a DB-backed queue so a killed worker's job stays pending and is reprocessed on restart; and `api` has no in-flight work to lose — it does no in-process picture processing (`PICTURE_PROCESS_THREADS_LIMIT: 0`), `reverseproxy` (its only ingress) is stopped first so there are no live requests, killed DB transactions roll back atomically, and any orphaned temp upload is handled by the existing orphan-prune.
-- **`keycloak-export-loop.sh` now traps `SIGTERM`/`SIGINT`** — as PID 1 a shell blocked in a foreground `sleep` never saw the signal, guaranteeing a full grace-period wait on every stop. It now traps the signal and runs the sleep as `sleep … & wait $!` so shutdown interrupts it and the container exits immediately.
-
-**Learnings.**
-
-- Coolify stops a compose project's containers **serially**, so any container that ignores `SIGTERM` adds its whole grace period to the total teardown time.
-- Coolify's UI "Stop Grace Period" **overrides the compose `stop_grace_period`** field (but not `stop_signal`), so per-service `stop_grace_period` values are ineffective under Coolify — `stop_signal` is the lever that actually works.
-
-`BACKUP.md` — comprehensive runbook for backing up a production Panoramax instance to Backblaze B2, covering:
-- PostgreSQL dumps (geovisio + keycloak schemas) encrypted with restic
-- Permanent HD pictures synced S3-to-S3 with rclone (derivates deliberately excluded)
-- Keycloak realm export as a portable recovery artefact
-- Secrets and config backup
-- Full disaster-recovery procedure
-- Weekly copy to an external hard drive
+See [`CONTRIBUTING.md` → Coolify behaviours to know](./CONTRIBUTING.md#coolify-behaviours-to-know) for the platform quirks behind this.
 
 ---
 
-## Backup service implemented
+## Secrets and required variables
 
-The `backup/` sidecar described in `BACKUP.md` §5/§7 is now wired into the stack:
+**Required variables are enforced.** Variables with no default that would cause a broken or cryptic deployment if unset carry `:?` in `docker-compose.yml`, so Compose (and Coolify) refuse to start and name the missing variable rather than passing empty strings into containers: `DOMAIN`, `FS_TMP_URL`, `FS_PERMANENT_URL`, `FS_DERIVATES_URL`, `S3_PERMANENT_PUBLIC_URL`, `S3_DERIVATES_PUBLIC_URL`, `RESTIC_PASSWORD`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY`, `BACKUP_S3_SECRET_KEY`.
 
-- **New `backup/` directory** — `Dockerfile` (Alpine + restic, rclone, `postgresql16-client`, `supercronic`), `entrypoint.sh` (renders the cron schedule from env vars via `envsubst`), `crontab.template`, and the backup scripts (`backup-db.sh`, `backup-images.sh`, `backup-config.sh`, `backup-healthcheck.sh`, `restic-check.sh`).
-- **`docker-compose.yml`** — added the `backup` service (restic repository derived from `BACKUP_S3_*`, all required secrets/credentials reused rather than re-entered), a `backup_scratch` volume for working files, and a `kc_export` volume for the portable Keycloak realm snapshot (see "Keycloak realm export automated" below).
-- **`env.example`** — documented the new `BACKUP_S3_*`, `RESTIC_PASSWORD`, `PGHOST`/`PGUSER`, `BACKUP_CRON_*`, and `RESTIC_KEEP_*` variables.
-
-Out of scope (operational, not code): the weekly HDD copy (§8) and the disaster-recovery runbook (§9).
-
----
-
-## Keycloak realm export automated
-
-`BACKUP.md` §5.4 originally called for a Coolify Scheduled Task to trigger `kc.sh export` — the one manual step in an otherwise all-code backup setup. Replaced with a code-only approach:
-
-- **New `keycloak-export-loop.sh`** — a sleep-loop entrypoint that calls `kc.sh export --optimized --dir /export --users realm_file --realm geovisio` once at startup and then every `KC_EXPORT_INTERVAL_SECONDS` (default daily). `kc.sh export` reads directly from Postgres and doesn't need the live HTTP server, so this runs as its own sidecar rather than inside the running `auth` process.
-- **`Dockerfile.keycloak`** — copies the loop script into the image (`COPY --chmod=755`); the default `auth` entrypoint/command is unaffected.
-- **`docker-compose.yml`** — added a `keycloak-export` service reusing the `auth` service's build (via a new `x-base-keycloak` anchor) but overriding the entrypoint to the export loop and running with only the DB connection env vars it actually needs. Runs as `user: "0:0"` — the `kc_export` named volume is root-owned by default and Keycloak's image runs as uid 1000, which can't write to it otherwise; this container never listens on a port and only invokes the CLI export, so the tradeoff is low-risk.
-- **`backup/backup-config.sh`** — the restic `config` backup now also includes `/backups/keycloak` (the read-only `kc_export` mount), so the realm snapshot ships in the same nightly run as the secrets it already backs up.
-
-A dedicated Keycloak-based sidecar was necessary rather than folding this into the existing Alpine `backup` container: `kc.sh export` requires the full Keycloak/Quarkus JVM runtime built for glibc, which can't be cleanly embedded in the musl-based Alpine image without re-basing it entirely.
-
----
-
-## Backup sidecar crash-loop fixes
-
-The `backup` and `keycloak-export` sidecars both crash-looped in practice after initial rollout; each was root-caused and fixed independently:
-
-- **supercronic `-no-reap`** — supercronic's zombie-reaping only activates when it detects it's running as PID 1, and that reaping logic crashed immediately on startup (before any cron job ran), restarting the `backup` container in a tight loop. Runs with `-no-reap` now and lets Docker's own init (tini) handle reaping.
-- **`kc.sh export --optimized`** — plain `kc.sh export` re-augments the Quarkus build config at runtime, and since `KC_DB=postgres` is a build-time property not mirrored as a runtime env var on `keycloak-export`, re-augmentation silently dropped the Postgres JDBC driver config and broke every export. `--optimized` reuses the build already baked into the image, matching how `auth` itself runs `start --optimized`.
-- **Auto-initialize the restic repo** — fresh deploys crash-looped every backup/check job overnight because the restic S3 repo was never initialized. `entrypoint.sh` now detects an uninitialized repo and runs `restic init` automatically instead of requiring a manual first-run step.
-- **rclone connection strings quoted** — rclone's inline connection-string syntax uses `:` as the remote/path separator, so an unquoted `endpoint=https://host` value was misparsed into an "unsupported protocol scheme" error. `endpoint`/`region` are now single-quoted in `backup-images.sh` and the matching `BACKUP.md` examples.
-- **`backup-images.sh` logs transfer stats** — rclone's default log level (NOTICE) suppresses the final "Transferred:" summary, so a clean nightly run produced no output at all. Added `-v` so the stats line always prints, making it possible to confirm from logs alone that a sync did something.
-
----
-
-## Keycloak realm import stability
-
-`auth`'s `start --optimized --import-realm` was re-importing the realm file on every boot instead of once, and `keycloak-export` intermittently raced it during startup. Root-caused and fixed as a sequence:
-
-- **One-shot `keycloak-import` service** — `--import-realm` triggers Keycloak's own internal restart after import completes, but that self-restart was happening before the import's DB write committed, so every subsequent boot still found no realm, re-imported, and restarted again — an infinite loop (`auth` cycling every ~15-25s, `keycloak-export` perpetually failing with "realm not found by realm name 'geovisio'"). A new `keycloak-import` service (`restart: "no"`) now runs `kc.sh import` once against the DB before `auth` or `keycloak-export` start; `auth` starts with plain `start --optimized` (no import flag), and both `auth` and `keycloak-export` gate on `keycloak-import`'s `service_completed_successfully`.
-- **`keycloak-import` points `--file` at the realm file directly** — `--dir /opt/keycloak/data/import` only logged a directory scan and never actually imported `geovisio_realm.json` (no `SingleFileImportProvider` log line). Master realm bootstrap succeeded regardless, masking the failure until `keycloak-export` surfaced it. Pointing `--file` directly at `geovisio_realm.json` is unambiguous.
-- **`keycloak-export` retries with backoff instead of exiting** — with no ordering dependency on `auth`, `keycloak-export` could run before the realm was imported and fail with "realm not found." Under `set -eu` that exited the script and restarted the whole container on `restart: unless-stopped`, triggering a full JVM boot on every retry with no backoff — a second Keycloak JVM competing for CPU/DB alongside `auth` and likely contributing to `auth`'s own startup instability. The export loop now retries in place every 30s until it succeeds, without restarting the container.
-- **`keycloak-export` serialized after `auth`'s healthcheck, then that dependency reverted** — both `auth` and `keycloak-export` run Keycloak's Liquibase migration on boot; on a fresh schema they raced to create the changelog table, crashing `keycloak-export` with "relation databasechangelog already exists." Adding `depends_on: auth: condition: service_healthy` fixed the race but turned `auth`'s already-flaky healthcheck into a hard deploy blocker, which Coolify then retried as a full redeploy loop — so the hard dependency was reverted once `keycloak-export`'s own retry-with-backoff loop (above) made the race self-healing without needing compose-level ordering.
-- **`auth` healthcheck downgraded to a bare TCP-connect check** — the previous check sent a real GET to `/oauth/realms/master` requiring a 200, which only succeeds once realm import fully finishes. On Coolify, something restarts unhealthy containers on a shorter timeout than compose's own `start_period` (observed ~23-29s restarts vs. a configured 60s `start_period` + 5x5s retries), so `auth` never got far enough into startup to pass before being killed and restarted, looping indefinitely. The healthcheck is now a bare TCP-connect (liveness, not readiness) — dependents may see a few seconds of 503s from `auth` right after it's marked healthy.
-- **`PGHOST`/`PGUSER` hardcoded** — both always matched the `db` service's own name/user, so making them Coolify-configurable had no real use case and was a footgun: Coolify's Docker Compose buildpack injects every app-level env var into all services, and a `PGHOST` meant only for `backup` previously broke `db`'s own local init script when set. Removed from `env.example`; hardcoded in `docker-compose.yml` and `backup-db.sh`.
-
----
-
-## Backup operator tooling
-
-- **`backup/backup-now.sh`** — combines the images/db/config scripts into a single manually-invoked entrypoint for one-off backup runs, layered on top of the existing daily cron schedule.
-- **`backup/fix-object-acls.sh`** — some S3-compatible providers (e.g. OVH) don't support bucket policies, so making objects publicly readable after a restore requires setting `public-read` ACL per-object. Parallelizes the calls and reports progress.
-
----
-
-## S3 public-read ACLs for public paths
-
-Added `public-read` ACL to the public S3 paths in `env.example` so the website can load pictures directly from S3 (via `S3_PERMANENT_PUBLIC_URL`/`S3_DERIVATES_PUBLIC_URL`) without a bucket policy — needed on providers that don't support them (see `fix-object-acls.sh` above for backfilling existing objects).
-
----
-
-## `BACKUP.md` §9 restore procedure corrected
-
-The restore runbook's "bring up Postgres only, then `CREATE DATABASE`" steps didn't reflect how this stack actually starts: the `migrations` and `auth` (`--import-realm`, later `keycloak-import`) services auto-create empty `geovisio`/`keycloak` schemas on a fresh deploy, so a restore lands on top of a pre-existing empty schema rather than a blank database. Rewritten so `pg_restore` uses `--clean --if-exists` to overwrite that pre-existing schema, clarifies which commands run in the `backup` container vs. any machine, and states that the derivates warm-up is mandatory (not optional) for this deployment's `PREPROCESS` + direct-S3-serving configuration.
-
----
-
-## Magic Environment Variables added
-
-Upstream's compose file expects the operator to supply every secret by hand. Here, the five application secrets (`OAUTH_CLIENT_SECRET`, `FLASK_SECRET_KEY`, `PG_PASSWORD`, `KC_DB_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`) are Coolify [Magic Environment Variables](https://coolify.io/docs/knowledge-base/environment-variables#magic-environment-variables) instead: each reference in `docker-compose.yml` is `${SERVICE_PASSWORD_64_<ID>}` (no `:?` guard — Coolify guarantees a value), so Coolify generates a strong 64-character value the first time the compose file is loaded. The `SERVICE_PASSWORD_64_*` (no-symbol) form was chosen deliberately because `PG_PASSWORD`/`KC_DB_PASSWORD` are embedded in `postgres://` and JDBC connection strings where a symbol would corrupt the URL. The container-facing env var names are unchanged, so `backup-config.sh`, `backup-db.sh`, `prune-orphan-images.sh`, and `1-init-keycloak-db.sh` still see the plain names, and `secrets.env` still stores them under those names.
-
-**The `ID` portion must contain no underscores** — Coolify silently generates nothing if it does ([coollabsio/coolify#11043](https://github.com/coollabsio/coolify/issues/11043#issuecomment-5152246623)), which is why the names below squash the container-facing ones. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) before adding or renaming one. The mapping is:
+**The five application secrets are Coolify Magic Environment Variables.** Upstream expects the operator to supply each by hand; here each reference is `${SERVICE_PASSWORD_64_<ID>}` (no `:?` guard — Coolify guarantees a value), so [Coolify](https://coolify.io/docs/knowledge-base/environment-variables#magic-environment-variables) generates a strong 64-character value the first time the compose file is loaded. The no-symbol `SERVICE_PASSWORD_64_*` form was chosen deliberately because `PG_PASSWORD`/`KC_DB_PASSWORD` are embedded in `postgres://` and JDBC connection strings, where a symbol would corrupt the URL. Container-facing names are unchanged, so `backup-config.sh`, `backup-db.sh`, `prune-orphan-images.sh`, and `1-init-keycloak-db.sh` still see the plain names, and `secrets.env` still stores them that way.
 
 | Container-facing name     | Coolify UI name                             |
 | ------------------------- | ------------------------------------------- |
@@ -216,8 +131,20 @@ Upstream's compose file expects the operator to supply every secret by hand. Her
 | `KC_DB_PASSWORD`          | `SERVICE_PASSWORD_64_KCDBPASSWORD`          |
 | `KEYCLOAK_ADMIN_PASSWORD` | `SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD` |
 
+The `ID` portion must contain no underscores — Coolify silently generates nothing if it does ([coollabsio/coolify#11043](https://github.com/coollabsio/coolify/issues/11043#issuecomment-5152246623)), which is why the names above squash the container-facing ones. See [`CONTRIBUTING.md`](./CONTRIBUTING.md#coolify-magic-environment-variables) before adding or renaming one.
+
 `RESTIC_PASSWORD` is deliberately **not** a magic variable. It is the only key that decrypts the backups, so it must be generated and stored by the operator outside the server — a copy that lives only in Coolify, on the same host the backups exist to protect, is worthless the day that host is gone.
 
-Restore impact: magic vars generate on a fresh instance and will not match the backup, so `backup_and_restore_instructions.md` instructs overwriting each generated `SERVICE_PASSWORD_64_*` with the value from the recovered `secrets.env` — matched via the table above — *before* the first deploy, otherwise `keycloak-import` bakes the wrong `OAUTH_CLIENT_SECRET` into the imported realm and login fails.
+**Restore impact.** Magic vars regenerate on a fresh instance and will not match the backup, so `backup_and_restore_instructions.md` requires overwriting each `SERVICE_PASSWORD_64_*` with the value from the recovered `secrets.env` — matched via the table above — *before* the first deploy, or `keycloak-import` bakes the wrong `OAUTH_CLIENT_SECRET` into the realm and login fails. The `kcadm.sh` snippets in the runbooks authenticate with `$KC_BOOTSTRAP_KEYCLOAK_ADMIN`/`$KC_BOOTSTRAP_KEYCLOAK_ADMIN_PASSWORD`, the names `docker-compose.yml` actually sets on `auth`.
 
-The `kcadm.sh` runbook snippets in `deployment_instructions.md` and `backup_and_restore_instructions.md` authenticate with `$KC_BOOTSTRAP_KEYCLOAK_ADMIN`/`$KC_BOOTSTRAP_KEYCLOAK_ADMIN_PASSWORD` rather than `$KEYCLOAK_ADMIN_PASSWORD`, because those are the names `docker-compose.yml` sets on the `auth` service itself. `$KEYCLOAK_ADMIN_PASSWORD` only ever existed inside that container as a side effect of Coolify injecting every app-level env var into every service, and stops existing once the Coolify-side name is `SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD`.
+**Other parameterised values.** `KC_DB_PASSWORD` replaced a hardcoded password in `1-init-keycloak-db.sh` and `docker-compose.yml`. `VITE_TITLE`, `VITE_META_TITLE`, and `VITE_META_DESCRIPTION` became variables with the upstream strings as defaults. `INSTANCE_NAME`'s two defaults were aligned — the website fell back to `A geovisio instance` while the API's `API_SUMMARY` fell back to `A Panoramax instance`, so an operator who left it unset got different names in the site header and the federation metadata; both now use `A Panoramax instance`.
+
+SMTP is not configured by environment variable in either upstream or here — the realm imports with an empty `smtpServer`, and an admin sets email up in the Keycloak console. Keeping it out of the automated import avoids Keycloak's strict validation of `smtpServer.from`, which hard-failed the import whenever SMTP was unset.
+
+---
+
+## Documentation and repo tooling
+
+Upstream ships its guidance as an `env.example` file and comments in the compose file. This repo replaces those with a documentation set at the repo root — [`README.md`](./README.md), [`deployment_instructions.md`](./deployment_instructions.md), [`configuration_options.md`](./configuration_options.md) (the successor to `env.example`, covering every variable), [`backup_and_restore_instructions.md`](./backup_and_restore_instructions.md), and [`CONTRIBUTING.md`](./CONTRIBUTING.md) — plus `backup/backup_architecture.md` next to the code it describes.
+
+`scripts/check-upstream.sh` reports upstream commits touching `docker/full-keycloak-auth/` since the last one reviewed, and `--record` writes that commit SHA to `.upstream-sync`. Because this repo mirrors upstream's directory path, git can diff the two directly; see [`CONTRIBUTING.md` → Syncing with upstream](./CONTRIBUTING.md#syncing-with-upstream).

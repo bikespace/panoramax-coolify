@@ -16,6 +16,20 @@ Two constraints to keep in mind when adding or renaming one:
 
 ---
 
+## Coolify behaviours to know
+
+Platform behaviours that aren't documented upstream and that this repo's compose file is shaped around. Each was found the hard way; changing the related settings without knowing them tends to reintroduce the original problem.
+
+**Containers are stopped strictly serially.** `docker events` during a redeploy shows Coolify stopping one container, waiting for it to die, then starting on the next. Any service that ignores `SIGTERM` therefore adds its *entire* grace period to the total teardown time — the waits are additive, not overlapped. This is why `api` and the workers carry `stop_signal: SIGKILL` (see the [CHANGELOG](./CHANGELOG.md#faster-shutdown-and-redeploys)); it took teardown from ~3 minutes to ~9 seconds.
+
+**Coolify's UI "Stop Grace Period" overrides the compose `stop_grace_period` field** — but not `stop_signal`. Per-service `stop_grace_period` values are simply ineffective under Coolify, so `stop_signal` is the only lever that actually works for a service that won't shut down promptly.
+
+**Coolify's Docker Compose buildpack injects every app-level environment variable into every service**, not just the ones that reference it. A variable meant for one container is visible in all of them, which can collide with another image's own conventions — a `PGHOST` intended for `backup` broke the `db` service's init script this way. Variables in that situation are hardcoded per-service in `docker-compose.yml` rather than exposed in the Coolify UI.
+
+**Coolify restarts unhealthy containers on a shorter timeout than compose's `start_period`.** Restarts were observed at ~23–29s against a configured 60s `start_period`, so a service that is slow to become *ready* gets killed and restarted before it ever passes. Healthchecks here are liveness checks (`auth`'s is a bare TCP connect), not readiness checks.
+
+---
+
 ## Validating docker-compose.yml locally
 
 `docker-compose.yml` uses Coolify's `exclude_from_hc` extension field, which isn't part of the Compose Specification — a plain `docker compose config` will reject it as an unknown key. Coolify strips this field server-side before validating; do the same locally. The command below also passes dummy values for the `${VAR:?}` variables the file requires, so it can be copy-pasted and run as-is — no real secrets or `.env` file needed just to check the file parses:
