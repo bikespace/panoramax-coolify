@@ -2,7 +2,6 @@
 
 Notes for working on this repo. For operating a deployed instance, see the documents linked from the [README](./README.md).
 
----
 
 ## Coolify magic environment variables
 
@@ -14,7 +13,6 @@ Two constraints to keep in mind when adding or renaming one:
 
 **Don't write a placeholder form of the magic-variable token into a comment.** Coolify's scanner reads comment text too, so a made-up example name in a `#` line gets picked up and mis-parsed as a real declaration. Describe the naming pattern in prose, or point at this file, rather than spelling out a fake one inside `docker-compose.yml`.
 
----
 
 ## Coolify behaviours to know
 
@@ -28,7 +26,6 @@ Platform behaviours that aren't documented upstream and that this repo's compose
 
 **Coolify restarts unhealthy containers on a shorter timeout than compose's `start_period`.** Restarts were observed at ~23–29s against a configured 60s `start_period`, so a service that is slow to become *ready* gets killed and restarted before it ever passes. Healthchecks here are liveness checks (`auth`'s is a bare TCP connect), not readiness checks.
 
----
 
 ## Validating docker-compose.yml locally
 
@@ -45,7 +42,6 @@ grep -v 'exclude_from_hc' docker/full-keycloak-auth/docker-compose.yml | \
 
 No output and a zero exit code means the file is valid. The `SERVICE_PASSWORD_64_*` secrets aren't listed because they carry no `:?` guard — Coolify fills them in, and locally they resolve to empty strings without failing the parse.
 
----
 
 ## Syncing with upstream
 
@@ -64,7 +60,7 @@ Once you've reviewed what it reports — ported the changes, or decided they don
 sh scripts/check-upstream.sh --record
 ```
 
-That updates `.upstream-sync`, which records the upstream **commit SHA** last reviewed (plus the date, as human context). A SHA rather than a date because it's exact and self-verifying: the next check diffs from that commit, so nothing can slip through a gap and there's no cutoff date to remember. Only `--record` writes to it, so the recorded SHA always means "a human reviewed this", not "someone ran the script".
+That updates `.upstream-sync`, which records the upstream **commit SHA** last reviewed (plus the date, as human context).
 
 **Inspect or pull in a file.** These need the upstream remote configured (the check script does not):
 
@@ -89,4 +85,4 @@ git checkout upstream/main -- docker/full-keycloak-auth/nginx.conf
 git diff <last_reviewed_sha>..upstream/main -- docker/full-keycloak-auth/
 ```
 
-Diffing our tree against upstream (`git diff HEAD upstream/main`) shows something else entirely: our **total divergence**, which is large and almost entirely intentional. Everything this repo added — the `backup/` directory, the Dockerfiles, `keycloak-export-loop.sh`, `env.example` — appears as a deletion, and `docker-compose.yml` always shows the `x-base-geovisio` anchor using `image: panoramax/api:${GEOVISIO_IMAGE_TAG:-latest}` instead of a `build:` block, since this repo does not include the API source code. See the [CHANGELOG](./CHANGELOG.md) for the full list. That diff is useful for auditing how far we've drifted, but it buries upstream's actual changes in hundreds of lines of noise.
+Diffing this repo against upstream (`git diff HEAD upstream/main`) mostly shows intentional divergences from the changes made to add features or ensure Coolify compatibility (described in `CHANGELOG.md`).
