@@ -301,6 +301,12 @@ services:
     ports:
       - 80
     restart: always
+    # Operator-supplied logo/favicon/social image, served by the branding
+    # location blocks in nginx.conf. Empty by default — every asset falls back to
+    # the website's own. Files are copied in over SSH rather than committed; see
+    # configuration_options.md (Branding).
+    volumes:
+      - branding:/etc/nginx/branding
     depends_on:
       api:
         condition: service_healthy
@@ -380,9 +386,14 @@ services:
     volumes:
       - backup_scratch:/backups
       - kc_export:/backups/keycloak:ro # populated by keycloak-export
+      - branding:/backups/branding:ro # operator-supplied assets; lives only in this volume, not in git
 
 volumes:
   postgres_data:
     name: geovisio_auth_postgres_data
   backup_scratch:
   kc_export:
+  # Explicitly named (like postgres_data) so operators can find it on the host
+  # when copying branding files in.
+  branding:
+    name: geovisio_branding

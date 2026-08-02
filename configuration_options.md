@@ -128,6 +128,54 @@ An example template for raster tiles:
 ```
 
 
+### Branding (logo, favicon, social image)
+
+These are **files, not environment variables.** The upstream `panoramax/website` image bakes its logo, favicon and social preview image in when it is built, so they cannot be set from the Coolify UI. Instead, the `reverseproxy` (nginx) service serves replacements out of a `branding` volume and falls back to the website's own asset whenever a file is absent — so an empty volume behaves exactly like a stock deployment, and each asset can be overridden on its own.
+
+Put a file in the volume under one of these names and it takes over the matching URL:
+
+| File in the volume | Replaces                        | Notes                                                        |
+| ------------------ | ------------------------------- | ------------------------------------------------------------ |
+| `logo.png`         | The site header/footer logo     | Square image works best.                                     |
+| `logo-small.png`   | The small logo variant          | Optional; falls back independently of `logo.png`.            |
+| `favicon.svg`      | The browser tab icon            | Square SVG that still reads well at small sizes.             |
+| `favicon-192.png`  | PWA icon, 192×192               | Used by an installed/home-screen shortcut, via `manifest.json`. |
+| `favicon-512.png`  | PWA icon, 512×512               | Same as above.                                               |
+| `meta-img.jpg`     | Open Graph link-preview image   | 1200×630 px for social platforms.                            |
+
+Replacing only `favicon.svg` still leaves the Panoramax mark on an installed home-screen shortcut — that uses the two PNGs.
+
+To install one, copy it into the running `reverseproxy` container (the volume is mounted at `/etc/nginx/branding`):
+
+```bash
+# 1. Get the file onto the Coolify host
+scp logo.png you@your-server:/tmp/
+
+# 2. Find the reverseproxy container (see the appendix in deployment_instructions.md)
+docker ps --format '{{.ID}}\t{{.Names}}' | grep reverseproxy
+
+# 3. Copy it in, and make sure nginx's worker can read it
+docker cp /tmp/logo.png <container-id>:/etc/nginx/branding/logo.png
+docker exec <container-id> chmod 644 /etc/nginx/branding/logo.png
+```
+
+To revert a single asset, delete it: `docker exec <container-id> rm /etc/nginx/branding/logo.png`.
+
+Things worth knowing:
+
+- **Changes take effect immediately** — no restart and no redeploy. You may need a hard refresh, since these are cached in the browser for an hour.
+- **`chmod 644` matters.** `docker cp` preserves the source file's permissions. A file nginx cannot read does *not* fall back — it returns `403` and the asset breaks (a missing logo rather than the Panoramax one).
+- **Mistakes are silent by design.** A misspelled filename does not produce a `404`; the request just falls back to the Panoramax default. To confirm an override actually took, compare the bytes:
+
+  ```bash
+  curl -s https://<your-domain>/panoramax_favicon.svg | shasum -a 256
+  shasum -a 256 favicon.svg   # should match
+  ```
+
+  The logo lives at a hashed URL that changes with each website release, so look up its current name rather than guessing: `docker exec <website-container> ls /usr/share/nginx/html/assets/ | grep logo`.
+- **The volume survives redeploys**, and its contents are included in the nightly config backup, so branding is restored along with everything else.
+
+
 ---
 
 ## Backup destination

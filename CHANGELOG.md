@@ -34,6 +34,7 @@ Coolify has several constraints that differ from plain Docker Compose:
 - **`Host` header added to `/oauth` proxy block** — ensures Keycloak sees the correct hostname when constructing redirect URLs.
 - **`reverseproxy` healthcheck added** — Coolify needs a health signal before marking the stack healthy.
 - **`website` healthcheck added** — `curl -sf http://localhost:3000` so Coolify can gate on the frontend being ready.
+- **Branding overrides served from the proxy** — the upstream `panoramax/website` image bakes its logo, favicon and social preview image in at build time, so replacing them would otherwise mean forking and rebuilding the frontend. nginx now serves them from a `branding` volume instead, with `try_files … @website` falling back to the website's own asset when no override file is present. The logo is matched by regex (`^/assets/logo-[^/]+\.png$`) because Vite content-hashes it into a filename that changes with every website release. Each block declares its own `default_type`, since this `nginx.conf` does not `include mime.types`. The volume is also mounted read-only into `backup`, as its contents live nowhere else. See [`configuration_options.md` → Branding](./configuration_options.md#branding-logo-favicon-social-image).
 
 ---
 
