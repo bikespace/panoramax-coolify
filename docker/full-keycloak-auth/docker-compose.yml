@@ -211,22 +211,25 @@ services:
       # and in federation listings. The API parses it as strict JSON.
       # check the documentation on how translations are handled: https://docs.panoramax.fr/backend/install/settings/#metadata
       #
-      # Each field is separately overridable. The translated fields take the whole
-      # contents of their object, so an operator picks their own languages, e.g.
-      #   API_SUMMARY_DESCRIPTION="en": "Imagery for Ontario", "de": "Bilder"
-      #
-      # IMPORTANT: no default below may contain { or }. Coolify's compose parser
-      # mis-reads braces inside a ${VAR:-default}, emits the mangled default as a
-      # second --build-arg and breaks the deploy. Keep the JSON braces literal,
-      # outside the interpolation. See changes_from_upstream.md.
+      # Each field is separately overridable, one variable per language. Every
+      # value is PLAIN TEXT: no quotes, no braces, no JSON punctuation. Both
+      # restrictions are Coolify's, not Compose's, and both have been hit for real:
+      #   * a quoted value set in the Coolify UI does not reach the container
+      #     intact, and the API then rejects the assembled JSON;
+      #   * a { or } inside a ${VAR:-default} makes Coolify's compose parser read
+      #     part of the default as a second variable and emit it as a build
+      #     argument, which breaks the build command outright.
+      # So the JSON punctuation all lives here, literally, and the variables only
+      # ever carry text. To publish a language beyond en/fr, add it to the objects
+      # below. See configuration_options.md and changes_from_upstream.md.
       API_SUMMARY: >-
         {
         "color": "${API_SUMMARY_COLOR:-#abcdef}",
-        "description": {${API_SUMMARY_DESCRIPTION:-"en": "a long description", "fr": "une description longue"}},
+        "description": {"en": "${API_SUMMARY_DESCRIPTION_EN:-a long description}", "fr": "${API_SUMMARY_DESCRIPTION_FR:-une description longue}"},
         "logo": "${API_SUMMARY_LOGO:-https://gitlab.com/panoramax/gitlab-profile/-/raw/main/images/logo.svg}",
         "email": "${API_SUMMARY_EMAIL:-the_administrator@mypanoramax.org}",
-        "name": {${API_SUMMARY_NAME:-"en": "A Panoramax instance", "fr": "Mon petit serveur des familles"}},
-        "geo_coverage": {${API_SUMMARY_GEO_COVERAGE:-"en": "Anywhere you like", "fr": "Partout où le vent vous portera"}}
+        "name": {"en": "${API_SUMMARY_NAME_EN:-A Panoramax instance}", "fr": "${API_SUMMARY_NAME_FR:-Mon petit serveur des familles}"},
+        "geo_coverage": {"en": "${API_SUMMARY_GEO_COVERAGE_EN:-Anywhere you like}", "fr": "${API_SUMMARY_GEO_COVERAGE_FR:-Partout où le vent vous portera}"}
         }
       API_REGISTRATION_IS_OPEN: ${API_REGISTRATION_IS_OPEN:-False} # True if the instance is open to registration, False if not, it is only used in the federation for the moment
     # No host port published: the API's only ingress is reverseproxy (nginx),
