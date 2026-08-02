@@ -112,7 +112,7 @@ API_SUMMARY_COLOR=#123456
 API_SUMMARY_EMAIL=admin@example.org
 ```
 
-This restriction is not cosmetic, and it is Coolify's rather than Docker's. A quoted value set in the Coolify UI does not reach the container intact; the API then fails to parse the assembled JSON and the `api` container crash-loops on startup with `Parameter API_SUMMARY is not recognized`. Note that this is the opposite of the single-quote advice for [`VITE_RASTER_TILE`](#other-website-options), which is a genuine JSON value substituted into the website's JavaScript — these are not, so do not quote them.
+This restriction is not cosmetic, and it is Coolify's rather than Docker's. A quoted value set in the Coolify UI does not reach the container intact; the API then fails to parse the assembled JSON and the `api` container crash-loops on startup with `Parameter API_SUMMARY is not recognized`. Note that this is the opposite of the single-quote advice for [`VITE_RASTER_TILE`](#vite_raster_tile-must-be-a-raster-source-not-a-url), which is a genuine JSON object substituted into the website's JavaScript — these are not, so do not quote them.
 
 **Expect them to appear blank in the Coolify UI.** Coolify only discovers a variable that is the entire value of a compose key, and inside `API_SUMMARY` these are embedded in a larger string, so `docker-compose.yml` also declares each one on its own line purely so that the UI lists them. Those declarations carry no default, so a variable you have not set shows as empty — empty means "using the default from the table above", not "blank in the API". Fill in the ones you want and leave the rest alone.
 
@@ -144,11 +144,17 @@ Most of the variables can just be added manually in the Coolify UI. Some tips on
 
 `VITE_ZOOM` and `VITE_CENTER`: you can ignore these; they may only be important in the case where there are no sequences uploaded. Otherwise, the map appears to default to a zoom and centre that shows all the existing sequences.
 
-The website image substitutes some URL vars (e.g. `VITE_TILES`) with `sed -i "s|DOCKER_VITE_TILES|$VITE_TILES|g"` and does not escape the replacement. An unescaped `&` expands to the matched text, so a URL with more than one query parameter — `?key=…&language=en` — will be corrupted. A single `?key=…` is safe.
+The website image substitutes every one of these vars into its already-built JavaScript with `sed -i "s|DOCKER_VITE_TILES|$VITE_TILES|g"` and does not escape the replacement. An unescaped `&` expands to the matched text, so a URL with more than one query parameter — `?key=…&language=en` — will be corrupted, and a literal `|` breaks the substitution outright. A single `?key=…` is safe. This applies to `VITE_TILES`, `VITE_RASTER_TILE` and `VITE_VIEWER_SETTINGS` alike.
 
 For inline JSON values like `VITE_RASTER_TILE`, make sure to use single quotes; double quotes seem to cause issues when parsed by Coolify. The "multiline" option also seems to cause issues, so for more complex JSON entries, edit it in an external file and then paste it in; Coolify will one-line it for you when you paste.
 
-An example template for raster tiles:
+#### `VITE_RASTER_TILE` must be a raster *source*, not a URL
+
+The value has to be an inline [MapLibre raster source](https://maplibre.org/maplibre-style-spec/sources/#raster) object. A URL pointing at a JSON document does **not** work, even though it looks like it should: the website tries to parse the variable as JSON, fails, logs `Unable to read env var 'VITE_RASTER_TILE' as JSON` in the browser console, and then hands the raw string to the viewer anyway. The viewer drops it straight into a style's `sources` block without fetching it, producing an invalid style and no aerial layer at all.
+
+A full MapLibre *style* (a document with `version`, `sources` **and** `layers`) is likewise not accepted here, inline or otherwise — this variable configures one source, not a whole basemap. If you have a style you want to use, set it as the main basemap with `VITE_TILES` instead.
+
+An example template for raster tiles, giving the source explicitly:
 
 ```json
 {
@@ -161,6 +167,18 @@ An example template for raster tiles:
   'attribution':' City of Toronto'
 }
 ```
+
+Alternatively a raster source can name a [TileJSON](https://github.com/mapbox/tilejson-spec) document with `url`, and let the provider supply the tile URLs, attribution and zoom range. This is the neatest way to use a commercial basemap such as MapTiler:
+
+```json
+{
+  'type': 'raster',
+  'url': 'https://api.maptiler.com/maps/hybrid-v4/256/tiles.json?key=YOUR_KEY',
+  'tileSize': 256
+}
+```
+
+Note the path: `/256/tiles.json`, which is MapTiler's pre-rendered raster tile service, so you get satellite imagery *with* labels. The `…/hybrid-v4/style.json?key=…` link that MapTiler's own interface offers is a vector style and is the wrong one for this variable. Swap `hybrid-v4` for any other MapTiler map ID. The single `?key=` keeps it safe from the `sed` substitution described above.
 
 
 ### Branding (logo, favicon, social image)
