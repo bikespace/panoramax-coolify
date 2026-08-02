@@ -1,12 +1,23 @@
-# Documentation — not needed inside any image
-BACKUP.md
-env.example
+# Deny everything, then re-admit only the files the Dockerfiles COPY.
+#
+# An allowlist rather than a denylist: it can only fail by being too strict,
+# which surfaces immediately as a build error. A denylist fails silently and
+# permissively — a new directory or secret lands in the build context and
+# nothing complains.
+#
+# This context is shared by Dockerfile.keycloak, Dockerfile.nginx and
+# Dockerfile.postgres, so the list below is the union of all three. The
+# Dockerfile being built is read separately and does not need admitting.
 
-# Secrets
-.env
+*
 
-# This file itself
-.dockerignore
+# Dockerfile.keycloak
+!keycloak-realm.json
+!keycloak-export-loop.sh
 
-# Storage placeholder
-pictures_storage/
+# Dockerfile.nginx
+!nginx.conf
+!robots.txt
+
+# Dockerfile.postgres
+!1-init-keycloak-db.sh
