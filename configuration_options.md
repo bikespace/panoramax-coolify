@@ -27,13 +27,13 @@ Note that `PGHOST` and `PGUSER` are **not Coolify-settable at all** — they are
 
 The five secrets below are **auto-generated** by Coolify. Each is wired up in `docker-compose.yml` as a Magic Environment Variable, which Coolify fills with a fresh 64-character alphanumeric value the first time the compose file is loaded and reuses across every service that references it. On a normal new install there is nothing to type in for these. In the Coolify **Environment Variables** UI they appear under their `SERVICE_PASSWORD_64_*` names, so each row lists both the name the container sees and the name you'll find in Coolify.
 
-| Variable (in the container) | Name in the Coolify UI                       | Description                                                                                                                                                                                                                                               |
-| --------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OAUTH_CLIENT_SECRET`       | `SERVICE_PASSWORD_64_OAUTHCLIENTSECRET`      | A secret key for the geovisio oauth client in keycloak.                                                                                                                                                                                                   |
-| `FLASK_SECRET_KEY`          | `SERVICE_PASSWORD_64_FLASKSECRETKEY`         | [Flask's secret key](https://flask.palletsprojects.com/en/3.0.x/config/#SECRET_KEY). A secret key used among other things for securely signing the session cookie. Flask's docs ask for a long random string; the 64-char generated value satisfies that. |
-| `KEYCLOAK_ADMIN_PASSWORD`   | `SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD`  | Password of the Keycloak admin account.                                                                                                                                                                                                                   |
-| `PG_PASSWORD`               | `SERVICE_PASSWORD_64_PGPASSWORD`             | Password of the postgres db account. Used inside `postgres://` connection strings, which is why the no-symbol `SERVICE_PASSWORD_64_*` form is used (a symbol like `@` or `/` would corrupt the URL).                                                      |
-| `KC_DB_PASSWORD`            | `SERVICE_PASSWORD_64_KCDBPASSWORD`           | Password for the `keycloak_user` postgres account (used by Keycloak to connect to its DB schema). Also embedded in a connection string — same no-symbol reasoning as `PG_PASSWORD`.                                                                       |
+| Variable (in the container) | Name in the Coolify UI                      | Description                                                                                                                                                                                                                                               |
+| --------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OAUTH_CLIENT_SECRET`       | `SERVICE_PASSWORD_64_OAUTHCLIENTSECRET`     | A secret key for the geovisio oauth client in keycloak.                                                                                                                                                                                                   |
+| `FLASK_SECRET_KEY`          | `SERVICE_PASSWORD_64_FLASKSECRETKEY`        | [Flask's secret key](https://flask.palletsprojects.com/en/3.0.x/config/#SECRET_KEY). A secret key used among other things for securely signing the session cookie. Flask's docs ask for a long random string; the 64-char generated value satisfies that. |
+| `KEYCLOAK_ADMIN_PASSWORD`   | `SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD` | Password of the Keycloak admin account.                                                                                                                                                                                                                   |
+| `PG_PASSWORD`               | `SERVICE_PASSWORD_64_PGPASSWORD`            | Password of the postgres db account. Used inside `postgres://` connection strings, which is why the no-symbol `SERVICE_PASSWORD_64_*` form is used (a symbol like `@` or `/` would corrupt the URL).                                                      |
+| `KC_DB_PASSWORD`            | `SERVICE_PASSWORD_64_KCDBPASSWORD`          | Password for the `keycloak_user` postgres account (used by Keycloak to connect to its DB schema). Also embedded in a connection string — same no-symbol reasoning as `PG_PASSWORD`.                                                                       |
 
 The Coolify-side names squash the underscores out of the container-facing names deliberately: the `ID`/`IDENTIFIER` portion of a magic-variable name must be letters only, and Coolify silently generates nothing if it contains an underscore — see [coollabsio/coolify#11043](https://github.com/coollabsio/coolify/issues/11043#issuecomment-5152246623). Keep that constraint in mind if you ever add another magic variable.
 
@@ -93,8 +93,17 @@ These carry no credentials — they are used by clients to fetch images directly
 | `VITE_TITLE`            | Optional                    | The title for the `<title>` tag of the HTML. Defaults to `My Panoramax: The free alternative to photo-mapping territories`. |
 | `VITE_META_TITLE`       | Optional                    | The title used in meta tags. Same default as `VITE_TITLE`.                                                                  |
 | `VITE_META_DESCRIPTION` | Optional                    | The description for meta tags, which is useful for SEO. Defaults to a generic description of Panoramax.                     |
+| `VITE_TILES`            | Optional                    | URL to a MapLibre JSON style (vector tiles)                                                                                 |
 
-Further website settings are documented in the [Panoramax website settings docs](https://docs.panoramax.fr/website/03_Settings/); only the variables above are wired up to Coolify in this deployment.
+
+### Other Website Options
+
+Further website settings are documented in the [Panoramax website settings docs](https://docs.panoramax.fr/website/03_Settings/); only the variables above are wired up to Coolify in this deployment by default.
+
+Most of the variables can just be added manually in the Coolify UI. Some tips on a handful of the options are included below:
+
+- `VITE_ZOOM` and `VITE_CENTER`: you can ignore these; they may only be important in the case where there are no sequences uploaded. Otherwise, the map appears to default to a zoom and centre that shows all the existing sequences.
+
 
 ---
 
