@@ -20,7 +20,7 @@ Note that `PGHOST` and `PGUSER` are **not Coolify-settable at all** — they are
 
 | Variable        | Required                                  | Description                                                                                                                                    |
 | --------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `INSTANCE_NAME` | Optional (default `A Panoramax instance`) | The name of your instance. Appears in the top left of the website, and is also used as the `name` in the API's instance metadata (`API_SUMMARY`) unless you set `API_SUMMARY` yourself — see [API and instance behaviour](#api-and-instance-behaviour). |
+| `INSTANCE_NAME` | Optional (default `A Panoramax instance`) | The name of your instance which will appear in the top left of the website. This sets the **website** only — the name the API publishes is `API_SUMMARY_NAME`, which defaults to the same text but is set separately. Set both, or the site header and the API metadata will disagree; see [API and instance behaviour](#api-and-instance-behaviour). |
 | `DOMAIN`        | **Required**                              | URL of your own domain (without a scheme or a path, just the domain). Must match the domain you set for the `reverseproxy` service in Coolify. |
 
 ## Secrets
@@ -86,22 +86,38 @@ These carry no credentials — they are used by clients to fetch images directly
 | `BLUR_API`                     | Optional (default `https://blur.panoramax.openstreetmap.fr`)     | Change this if you have your own blur API instance.                                                                                                                                                                                                                                                                                                    |
 | `API_PICTURES_LICENSE_SPDX_ID` | Optional (default `CC-BY-SA-4.0`)                                | SPDX id of the picture's license. If none is set, the pictures's license is considered to be proprietary.                                                                                                                                                                                                                                              |
 | `API_PICTURES_LICENSE_URL`     | Optional (default `https://spdx.org/licenses/CC-BY-SA-4.0.html`) | URL for the license.                                                                                                                                                                                                                                                                                                                                   |
-| `API_SUMMARY`                  | Recommended (default just has example values)                    | A JSON object of instance metadata — `color`, `description`, `logo`, `email`, `name`, `geo_coverage` — shown by the API and in federation listings. The shipped default is placeholder text, so set this on any real instance. See the notes below, and the [server settings docs](https://docs.panoramax.fr/backend/install/settings/#metadata) for the field list and how translations are handled. |
+| `API_SUMMARY_NAME`             | Recommended (default `"en": "A Panoramax instance", "fr": "Mon petit serveur des familles"`) | Short name of the instance, as it appears in the API and in federation listings. Translated field — see the notes below.                                                                                                                                                                                                |
+| `API_SUMMARY_DESCRIPTION`      | Recommended (default is placeholder text)                        | Longer description of the instance. Translated field.                                                                                                                                                                                                                                                                                                  |
+| `API_SUMMARY_GEO_COVERAGE`     | Recommended (default is placeholder text)                        | The geographic area the instance covers. Translated field.                                                                                                                                                                                                                                                                                             |
+| `API_SUMMARY_COLOR`            | Optional (default `#abcdef`)                                     | HTML colour code used as the instance's accent colour.                                                                                                                                                                                                                                                                                                 |
+| `API_SUMMARY_LOGO`             | Optional (default is the generic Panoramax logo)                 | URL of an SVG logo for the instance. This is the logo published in the API metadata; it is separate from the logo shown on the website, which is a file — see [Branding](#branding-logo-favicon-social-image).                                                                                                                                          |
+| `API_SUMMARY_EMAIL`            | Recommended (default `the_administrator@mypanoramax.org`)        | Public contact address for the instance administrator.                                                                                                                                                                                                                                                                                                 |
 
 More assistance with these options can be found in the [Panoramax API documentation](https://docs.panoramax.fr/backend/install/settings/).
 
-**Setting `API_SUMMARY`.** Enter it as one complete JSON object on a single line, for example:
+### Setting the `API_SUMMARY_*` fields
 
-```json
-{"color": "#abcdef", "description": {"en": "Street-level imagery for the region"}, "logo": "https://example.org/logo.svg", "email": "admin@example.org", "name": {"en": "My Panoramax"}, "geo_coverage": {"en": "Ontario, Canada"}}
+The API publishes a single `API_SUMMARY` JSON object describing the instance. That object is assembled in `docker-compose.yml` from the six variables above, so **there is no `API_SUMMARY` variable to set** — you set the fields individually and each one you leave alone keeps its default.
+
+`API_SUMMARY_COLOR`, `API_SUMMARY_LOGO` and `API_SUMMARY_EMAIL` are ordinary values. Type them plainly, with no quotes:
+
+```
+API_SUMMARY_COLOR=#123456
+API_SUMMARY_EMAIL=admin@example.org
 ```
 
-Two things to know before you do:
+`API_SUMMARY_NAME`, `API_SUMMARY_DESCRIPTION` and `API_SUMMARY_GEO_COVERAGE` are **translated** fields. You supply the *contents* of the translation object — the `"lang": "text"` pairs, **without** the enclosing `{ }`, which `docker-compose.yml` already provides:
 
-- **It is all-or-nothing.** Your value replaces the built-in default entirely; there is no per-field merge. To change only the colour you must still supply every field you want to keep.
-- **It overrides `INSTANCE_NAME` for the API.** The default derives its `name` from `INSTANCE_NAME`, so once you set `API_SUMMARY` the name comes from *its* `name` field instead. Set that field to the same value as `INSTANCE_NAME` unless you deliberately want the website header and the federation metadata to differ.
+```
+API_SUMMARY_NAME="en": "Panoramax Ontario"
+API_SUMMARY_DESCRIPTION="en": "Street-level imagery for Ontario", "de": "Bilder aus Ontario"
+```
 
-The default in `docker-compose.yml` is written across several lines only because YAML's `>-` folds it back into one; don't copy that layout into the Coolify UI.
+This is how you choose your languages: use any [ISO 639 codes](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes) you like. Upstream requires `"en"` as a minimum. The shipped defaults are English and French placeholders; if you set a field, you replace *all* of its languages, so include every one you want to keep.
+
+> **Use double quotes for the translated fields.** The API parses the assembled result as strict JSON, which only accepts `"`. This is the one place where the single-quote advice given for [`VITE_RASTER_TILE`](#other-website-options) does **not** apply — that value is substituted into the website's JavaScript, where single quotes are legal, whereas this one must be real JSON. If a translated field comes back wrong after a deploy, check what actually reached the container with `docker exec <api-container> env | grep API_SUMMARY` and see whether Coolify has escaped the quotes.
+
+Note that `INSTANCE_NAME` does **not** feed these fields — it sets the website header only. To keep the site and the API metadata consistent, set `API_SUMMARY_NAME`'s `"en"` value to match it.
 
 **Number of picture workers:** not an environment variable — add or remove `background-worker-N` services in `docker-compose.yml` to adjust the count.
 

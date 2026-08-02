@@ -207,17 +207,27 @@ services:
       NB_API_THREADS: 10
       # Default 2: Traefik (Coolify) + nginx (reverseproxy) both set X-Forwarded-For before reaching the API
       INFRA_NB_PROXIES: ${INFRA_NB_PROXIES:-2}
-      # API SUMMARY regroup many metadata about the instance
+      # API SUMMARY regroup many metadata about the instance, surfaced by the API
+      # and in federation listings. The API parses it as strict JSON.
       # check the documentation on how translations are handled: https://docs.panoramax.fr/backend/install/settings/#metadata
+      #
+      # Each field is separately overridable. The translated fields take the whole
+      # contents of their object, so an operator picks their own languages, e.g.
+      #   API_SUMMARY_DESCRIPTION="en": "Imagery for Ontario", "de": "Bilder"
+      #
+      # IMPORTANT: no default below may contain { or }. Coolify's compose parser
+      # mis-reads braces inside a ${VAR:-default}, emits the mangled default as a
+      # second --build-arg and breaks the deploy. Keep the JSON braces literal,
+      # outside the interpolation. See changes_from_upstream.md.
       API_SUMMARY: >-
-        ${API_SUMMARY:-{
-        "color": "#abcdef",
-        "description": {"en": "a long description", "fr": "une description longue"},
-        "logo": "https://gitlab.com/panoramax/gitlab-profile/-/raw/main/images/logo.svg",
-        "email": "the_administrator@mypanoramax.org",
-        "name": {"en": "${INSTANCE_NAME:-A Panoramax instance}", "fr": "Mon petit serveur des familles"},
-        "geo_coverage": {"en": "Anywhere you like", "fr": "Partout où le vent vous portera"}
-        }}
+        {
+        "color": "${API_SUMMARY_COLOR:-#abcdef}",
+        "description": {${API_SUMMARY_DESCRIPTION:-"en": "a long description", "fr": "une description longue"}},
+        "logo": "${API_SUMMARY_LOGO:-https://gitlab.com/panoramax/gitlab-profile/-/raw/main/images/logo.svg}",
+        "email": "${API_SUMMARY_EMAIL:-the_administrator@mypanoramax.org}",
+        "name": {${API_SUMMARY_NAME:-"en": "A Panoramax instance", "fr": "Mon petit serveur des familles"}},
+        "geo_coverage": {${API_SUMMARY_GEO_COVERAGE:-"en": "Anywhere you like", "fr": "Partout où le vent vous portera"}}
+        }
       API_REGISTRATION_IS_OPEN: ${API_REGISTRATION_IS_OPEN:-False} # True if the instance is open to registration, False if not, it is only used in the federation for the moment
     # No host port published: the API's only ingress is reverseproxy (nginx),
     # which reaches it as api:5000 over the compose network. Publishing to the
