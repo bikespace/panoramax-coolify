@@ -18,7 +18,7 @@ Two constraints to keep in mind when adding or renaming one:
 
 Platform behaviours that aren't documented upstream and that this repo's compose file is shaped around. Each was found the hard way; changing the related settings without knowing them tends to reintroduce the original problem.
 
-**Containers are stopped strictly serially.** `docker events` during a redeploy shows Coolify stopping one container, waiting for it to die, then starting on the next. Any service that ignores `SIGTERM` therefore adds its *entire* grace period to the total teardown time — the waits are additive, not overlapped. This is why `api` and the workers carry `stop_signal: SIGKILL` (see the [CHANGELOG](./CHANGELOG.md#faster-shutdown-and-redeploys)); it took teardown from ~3 minutes to ~9 seconds.
+**Containers are stopped strictly serially.** `docker events` during a redeploy shows Coolify stopping one container, waiting for it to die, then starting on the next. Any service that ignores `SIGTERM` therefore adds its *entire* grace period to the total teardown time — the waits are additive, not overlapped. This is why `api` and the workers carry `stop_signal: SIGKILL` (see the [changes documentation](./changes_from_upstream.md#faster-shutdown-and-redeploys)); it took teardown from ~3 minutes to ~9 seconds.
 
 **Coolify's UI "Stop Grace Period" overrides the compose `stop_grace_period` field** — but not `stop_signal`. Per-service `stop_grace_period` values are simply ineffective under Coolify, so `stop_signal` is the only lever that actually works for a service that won't shut down promptly.
 
@@ -85,4 +85,4 @@ git checkout upstream/main -- docker/full-keycloak-auth/nginx.conf
 git diff <last_reviewed_sha>..upstream/main -- docker/full-keycloak-auth/
 ```
 
-Diffing this repo against upstream (`git diff HEAD upstream/main`) mostly shows intentional divergences from the changes made to add features or ensure Coolify compatibility (described in `CHANGELOG.md`).
+Diffing this repo against upstream (`git diff HEAD upstream/main`) mostly shows intentional divergences from the changes made to add features or ensure Coolify compatibility (described in `changes_from_upstream.md`).

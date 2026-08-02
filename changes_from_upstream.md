@@ -1,6 +1,6 @@
-# Changelog
+# Changes from Upstream
 
-This changelog describes how this repository differs from the upstream [`docker/full-keycloak-auth`](https://gitlab.com/panoramax/server/api/-/tree/main/docker/full-keycloak-auth) example on `main`. Changes are organized thematically for ease of reading.
+This document describes how this repository differs from the upstream [`docker/full-keycloak-auth`](https://gitlab.com/panoramax/server/api/-/tree/main/docker/full-keycloak-auth) example on `main`. Changes are organized thematically for ease of reading.
 
 
 ## Pre-built image
