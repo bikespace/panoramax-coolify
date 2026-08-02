@@ -85,6 +85,11 @@ These carry no credentials — they are used by clients to fetch images directly
 | `API_REGISTRATION_IS_OPEN` | Optional (default `False`)                                   | Whether the instance is open to self-registration (shown in the website UI and federation metadata). Leave as `False` if account creation is admin-only.                                                                                                                                                                                               |
 | `BLUR_API`                 | Optional (default `https://blur.panoramax.openstreetmap.fr`) | Change this if you have your own blur API instance.                                                                                                                                                                                                                                                                                                    |
 
+**Number of picture workers:** not an environment variable — add or remove `background-worker-N` services in `docker-compose.yml` to adjust the count.
+
+**SMTP** is not configured via env vars. The realm imports with no email settings, and Keycloak sends no verification/reset emails until an admin configures SMTP manually in the Keycloak console (Realm settings > Email).
+
+
 ## Website
 
 | Variable                | Required                    | Description                                                                                                                 |
@@ -102,14 +107,26 @@ Further website settings are documented in the [Panoramax website settings docs]
 
 Most of the variables can just be added manually in the Coolify UI. Some tips on a handful of the options are included below:
 
-- `VITE_ZOOM` and `VITE_CENTER`: you can ignore these; they may only be important in the case where there are no sequences uploaded. Otherwise, the map appears to default to a zoom and centre that shows all the existing sequences.
+`VITE_ZOOM` and `VITE_CENTER`: you can ignore these; they may only be important in the case where there are no sequences uploaded. Otherwise, the map appears to default to a zoom and centre that shows all the existing sequences.
 
+The website image substitutes some URL vars (e.g. `VITE_TILES`) with `sed -i "s|DOCKER_VITE_TILES|$VITE_TILES|g"` and does not escape the replacement. An unescaped `&` expands to the matched text, so a URL with more than one query parameter — `?key=…&language=en` — will be corrupted. A single `?key=…` is safe.
 
----
+For inline JSON values like `VITE_RASTER_TILE`, make sure to use single quotes; double quotes seem to cause issues when parsed by Coolify. You can also check the multiline option to make it easier to view and edit JSON environment variables.
 
-**Number of picture workers:** not an environment variable — add or remove `background-worker-N` services in `docker-compose.yml` to adjust the count.
+An example template for raster tiles:
 
-**SMTP** is not configured via env vars. The realm imports with no email settings, and Keycloak sends no verification/reset emails until an admin configures SMTP manually in the Keycloak console (Realm settings > Email).
+```json
+{
+  'type': 'raster',
+  'tiles': ['https://gis.toronto.ca/arcgis/rest/services/basemap/cot_ortho/MapServer/tile/{z}/{y}/{x}'],
+  'tileSize': 256,
+  'minzoom': 0,
+  'maxzoom': 21,
+  'bounds': [-79.664992, 43.562500, -79.087180, 43.877064],
+  'attribution':' City of Toronto'
+}
+```
+
 
 ---
 
