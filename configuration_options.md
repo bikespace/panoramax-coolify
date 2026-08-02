@@ -111,7 +111,7 @@ Most of the variables can just be added manually in the Coolify UI. Some tips on
 
 The website image substitutes some URL vars (e.g. `VITE_TILES`) with `sed -i "s|DOCKER_VITE_TILES|$VITE_TILES|g"` and does not escape the replacement. An unescaped `&` expands to the matched text, so a URL with more than one query parameter — `?key=…&language=en` — will be corrupted. A single `?key=…` is safe.
 
-For inline JSON values like `VITE_RASTER_TILE`, make sure to use single quotes; double quotes seem to cause issues when parsed by Coolify. You can also check the multiline option to make it easier to view and edit JSON environment variables.
+For inline JSON values like `VITE_RASTER_TILE`, make sure to use single quotes; double quotes seem to cause issues when parsed by Coolify. The "multiline" option also seems to cause issues, so for more complex JSON entries, edit it in an external file and then paste it in; Coolify will one-line it for you when you paste.
 
 An example template for raster tiles:
 
@@ -134,14 +134,14 @@ These are **files, not environment variables.** The upstream `panoramax/website`
 
 Put a file in the volume under one of these names and it takes over the matching URL:
 
-| File in the volume | Replaces                        | Notes                                                        |
-| ------------------ | ------------------------------- | ------------------------------------------------------------ |
-| `logo.png`         | The site header/footer logo     | Square image works best.                                     |
-| `logo-small.png`   | The small logo variant          | Optional; falls back independently of `logo.png`.            |
-| `favicon.svg`      | The browser tab icon            | Square SVG that still reads well at small sizes.             |
-| `favicon-192.png`  | PWA icon, 192×192               | Used by an installed/home-screen shortcut, via `manifest.json`. |
-| `favicon-512.png`  | PWA icon, 512×512               | Same as above.                                               |
-| `meta-img.jpg`     | Open Graph link-preview image   | 1200×630 px for social platforms.                            |
+| File in the volume | Replaces                      | Notes                                                           |
+| ------------------ | ----------------------------- | --------------------------------------------------------------- |
+| `logo.png`         | The site header/footer logo   | Square image works best.                                        |
+| `logo-small.png`   | The small logo variant        | Optional; falls back independently of `logo.png`.               |
+| `favicon.svg`      | The browser tab icon          | Square SVG that still reads well at small sizes.                |
+| `favicon-192.png`  | PWA icon, 192×192             | Used by an installed/home-screen shortcut, via `manifest.json`. |
+| `favicon-512.png`  | PWA icon, 512×512             | Same as above.                                                  |
+| `meta-img.jpg`     | Open Graph link-preview image | 1200×630 px for social platforms.                               |
 
 Replacing only `favicon.svg` still leaves the Panoramax mark on an installed home-screen shortcut — that uses the two PNGs.
 
@@ -149,7 +149,7 @@ To install one, copy it into the running `reverseproxy` container (the volume is
 
 ```bash
 # 1. Get the file onto the Coolify host
-scp logo.png you@your-server:/tmp/
+scp your_logo.png you@your-server:/tmp/logo.png
 
 # 2. Find the reverseproxy container (see the appendix in deployment_instructions.md)
 docker ps --format '{{.ID}}\t{{.Names}}' | grep reverseproxy
