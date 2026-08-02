@@ -193,8 +193,9 @@ services:
       FLASK_SECRET_KEY: ${SERVICE_PASSWORD_64_FLASKSECRETKEY}
       FLASK_SESSION_COOKIE_DOMAIN: ${DOMAIN:-localhost}
       API_FORCE_AUTH_ON_UPLOAD: True
-      API_PICTURES_LICENSE_SPDX_ID: CC-BY-SA-4.0 # default pictures's license, change it if needed
-      API_PICTURES_LICENSE_URL: https://spdx.org/licenses/CC-BY-SA-4.0.html
+      # default pictures's license, change it if needed
+      API_PICTURES_LICENSE_SPDX_ID: ${API_PICTURES_LICENSE_SPDX_ID:-CC-BY-SA-4.0}
+      API_PICTURES_LICENSE_URL: ${API_PICTURES_LICENSE_URL:-https://spdx.org/licenses/CC-BY-SA-4.0.html}
       API_BLUR_URL: ${BLUR_API:-https://blur.panoramax.openstreetmap.fr}
       API_DERIVATES_PICTURES_PUBLIC_URL: ${S3_DERIVATES_PUBLIC_URL:?}
       API_PERMANENT_PICTURES_PUBLIC_URL: ${S3_PERMANENT_PUBLIC_URL:?}
@@ -209,14 +210,14 @@ services:
       # API SUMMARY regroup many metadata about the instance
       # check the documentation on how translations are handled: https://docs.panoramax.fr/backend/install/settings/#metadata
       API_SUMMARY: >-
-        {
-          "color": "#abcdef",
-          "description": {"en": "a long description", "fr": "une description longue"},
-          "logo": "https://gitlab.com/panoramax/gitlab-profile/-/raw/main/images/logo.svg", 
-          "email": "the_administrator@mypanoramax.org",
-          "name": {"en": "${INSTANCE_NAME:-A Panoramax instance}", "fr": "Mon petit serveur des familles"},
-          "geo_coverage": {"en": "Anywhere you like", "fr": "Partout où le vent vous portera"}
-        }
+        ${API_SUMMARY:-{
+        "color": "#abcdef",
+        "description": {"en": "a long description", "fr": "une description longue"},
+        "logo": "https://gitlab.com/panoramax/gitlab-profile/-/raw/main/images/logo.svg", 
+        "email": "the_administrator@mypanoramax.org",
+        "name": {"en": "${INSTANCE_NAME:-A Panoramax instance}", "fr": "Mon petit serveur des familles"},
+        "geo_coverage": {"en": "Anywhere you like", "fr": "Partout où le vent vous portera"}
+        }}
       API_REGISTRATION_IS_OPEN: ${API_REGISTRATION_IS_OPEN:-False} # True if the instance is open to registration, False if not, it is only used in the federation for the moment
     # No host port published: the API's only ingress is reverseproxy (nginx),
     # which reaches it as api:5000 over the compose network. Publishing to the
