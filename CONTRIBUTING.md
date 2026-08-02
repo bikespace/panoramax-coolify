@@ -2,7 +2,6 @@
 
 Notes for working on this repo. For operating a deployed instance, see the documents linked from the [README](./README.md).
 
----
 
 ## Coolify magic environment variables
 
@@ -14,7 +13,19 @@ Two constraints to keep in mind when adding or renaming one:
 
 **Don't write a placeholder form of the magic-variable token into a comment.** Coolify's scanner reads comment text too, so a made-up example name in a `#` line gets picked up and mis-parsed as a real declaration. Describe the naming pattern in prose, or point at this file, rather than spelling out a fake one inside `docker-compose.yml`.
 
----
+
+## Coolify behaviours to know
+
+Platform behaviours that aren't documented upstream and that this repo's compose file is shaped around. Each was found the hard way; changing the related settings without knowing them tends to reintroduce the original problem.
+
+**Containers are stopped strictly serially.** `docker events` during a redeploy shows Coolify stopping one container, waiting for it to die, then starting on the next. Any service that ignores `SIGTERM` therefore adds its *entire* grace period to the total teardown time — the waits are additive, not overlapped. This is why `api` and the workers carry `stop_signal: SIGKILL` (see the [changes documentation](./changes_from_upstream.md#faster-shutdown-and-redeploys)); it took teardown from ~3 minutes to ~9 seconds.
+
+**Coolify's UI "Stop Grace Period" overrides the compose `stop_grace_period` field** — but not `stop_signal`. Per-service `stop_grace_period` values are simply ineffective under Coolify, so `stop_signal` is the only lever that actually works for a service that won't shut down promptly.
+
+**Coolify's Docker Compose buildpack injects every app-level environment variable into every service**, not just the ones that reference it. A variable meant for one container is visible in all of them, which can collide with another image's own conventions — a `PGHOST` intended for `backup` broke the `db` service's init script this way. Variables in that situation are hardcoded per-service in `docker-compose.yml` rather than exposed in the Coolify UI.
+
+**Coolify restarts unhealthy containers on a shorter timeout than compose's `start_period`.** Restarts were observed at ~23–29s against a configured 60s `start_period`, so a service that is slow to become *ready* gets killed and restarted before it ever passes. Healthchecks here are liveness checks (`auth`'s is a bare TCP connect), not readiness checks.
+
 
 ## Validating docker-compose.yml locally
 
@@ -31,31 +42,47 @@ grep -v 'exclude_from_hc' docker/full-keycloak-auth/docker-compose.yml | \
 
 No output and a zero exit code means the file is valid. The `SERVICE_PASSWORD_64_*` secrets aren't listed because they carry no `:?` guard — Coolify fills them in, and locally they resolve to empty strings without failing the parse.
 
----
 
 ## Syncing with upstream
 
 The upstream deployment files live at `docker/full-keycloak-auth/` in the [panoramax/server/api](https://gitlab.com/panoramax/server/api) repo on the `main` branch. Because this repo uses the same path, git can diff them directly.
 
-**One-time setup:**
+**Check for new upstream changes:**
+```bash
+sh scripts/check-upstream.sh
+```
+
+This fetches upstream and lists any commits touching `docker/full-keycloak-auth/` since the last one that was reviewed. It writes nothing; run it as often as you like. No setup needed — it fetches by URL rather than through a named remote.
+
+Once you've reviewed what it reports — ported the changes, or decided they don't apply — mark them done:
+
+```bash
+sh scripts/check-upstream.sh --record
+```
+
+That updates `.upstream-sync`, which records the upstream **commit SHA** last reviewed (plus the date, as human context).
+
+**Inspect or pull in a file.** These need the upstream remote configured (the check script does not):
+
 ```bash
 git remote add upstream https://gitlab.com/panoramax/server/api.git
 git fetch upstream
 ```
 
-**See what changed upstream in the files this repo tracks:**
-```bash
-git diff HEAD upstream/main -- docker/full-keycloak-auth/
-```
+Then:
 
-**Inspect a specific file:**
 ```bash
+# Read a file as it exists upstream
 git show upstream/main:docker/full-keycloak-auth/nginx.conf
-```
 
-**Pull in a specific updated file:**
-```bash
+# Overwrite our copy with the upstream version
 git checkout upstream/main -- docker/full-keycloak-auth/nginx.conf
 ```
 
-**Note:** `docker-compose.yml` will always show one intentional divergence in the diff — the top-level `x-base-geovisio` anchor uses `image: panoramax/api:${GEOVISIO_IMAGE_TAG:-latest}` here instead of a `build:` block, since this repo does not include the API source code. Any other diffs indicate upstream changes worth reviewing.
+**Two different diffs — don't confuse them.** To see *what upstream changed*, diff upstream against upstream, which is what the check script does:
+
+```bash
+git diff <last_reviewed_sha>..upstream/main -- docker/full-keycloak-auth/
+```
+
+Diffing this repo against upstream (`git diff HEAD upstream/main`) mostly shows intentional divergences from the changes made to add features or ensure Coolify compatibility (described in `changes_from_upstream.md`).

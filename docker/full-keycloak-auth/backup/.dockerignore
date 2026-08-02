@@ -1,0 +1,11 @@
+# Deny everything, then re-admit only what the Dockerfile COPYs. See the
+# .dockerignore one directory up for why this is an allowlist.
+#
+# `!*.sh` mirrors the Dockerfile's `COPY *.sh` glob, so a new backup script
+# still ships automatically — but the glob now has an explicit boundary
+# rather than picking up whatever happens to be in this directory.
+
+*
+
+!*.sh
+!crontab.template
