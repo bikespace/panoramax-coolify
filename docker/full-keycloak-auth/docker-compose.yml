@@ -222,6 +222,24 @@ services:
       # So the JSON punctuation all lives here, literally, and the variables only
       # ever carry text. To publish a language beyond en/fr, add it to the objects
       # below. See configuration_options.md and changes_from_upstream.md.
+      #
+      # The nine declarations below exist so that Coolify lists these in its
+      # Environment Variables UI: it only discovers a variable that is the whole
+      # value of a compose key, and inside API_SUMMARY they are embedded in a
+      # larger string. They deliberately carry no defaults — the real ones live in
+      # API_SUMMARY, and duplicating them here would just create two places to
+      # forget. Note these declarations cannot themselves feed API_SUMMARY:
+      # interpolation reads the environment and the --env-file, never a sibling
+      # key, so a default set here would resolve to "" over there.
+      API_SUMMARY_COLOR: ${API_SUMMARY_COLOR:-}
+      API_SUMMARY_LOGO: ${API_SUMMARY_LOGO:-}
+      API_SUMMARY_EMAIL: ${API_SUMMARY_EMAIL:-}
+      API_SUMMARY_NAME_EN: ${API_SUMMARY_NAME_EN:-}
+      API_SUMMARY_NAME_FR: ${API_SUMMARY_NAME_FR:-}
+      API_SUMMARY_DESCRIPTION_EN: ${API_SUMMARY_DESCRIPTION_EN:-}
+      API_SUMMARY_DESCRIPTION_FR: ${API_SUMMARY_DESCRIPTION_FR:-}
+      API_SUMMARY_GEO_COVERAGE_EN: ${API_SUMMARY_GEO_COVERAGE_EN:-}
+      API_SUMMARY_GEO_COVERAGE_FR: ${API_SUMMARY_GEO_COVERAGE_FR:-}
       API_SUMMARY: >-
         {
         "color": "${API_SUMMARY_COLOR:-#abcdef}",
