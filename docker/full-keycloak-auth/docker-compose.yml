@@ -213,7 +213,7 @@ services:
         ${API_SUMMARY:-{
         "color": "#abcdef",
         "description": {"en": "a long description", "fr": "une description longue"},
-        "logo": "https://gitlab.com/panoramax/gitlab-profile/-/raw/main/images/logo.svg", 
+        "logo": "https://gitlab.com/panoramax/gitlab-profile/-/raw/main/images/logo.svg",
         "email": "the_administrator@mypanoramax.org",
         "name": {"en": "${INSTANCE_NAME:-A Panoramax instance}", "fr": "Mon petit serveur des familles"},
         "geo_coverage": {"en": "Anywhere you like", "fr": "Partout où le vent vous portera"}
