@@ -26,6 +26,14 @@ Platform behaviours that aren't documented upstream and that this repo's compose
 
 **Coolify restarts unhealthy containers on a shorter timeout than compose's `start_period`.** Restarts were observed at ~23–29s against a configured 60s `start_period`, so a service that is slow to become *ready* gets killed and restarted before it ever passes. Healthchecks here are liveness checks (`auth`'s is a bare TCP connect), not readiness checks.
 
+**A `{` or `}` inside a `${VAR:-default}` breaks the build.** Coolify's compose parser reads part of a brace-containing default as a *second* variable name and emits it as a build argument — `--build-arg "color": "#abcdef", …` — whose unbalanced quotes kill the build command with `bash: -c: line 1: unexpected EOF while looking for matching '"'`. Colons and dashes are fine; several URL defaults and `CC-BY-SA-4.0` rely on that. This is why the JSON punctuation of `API_SUMMARY` lives literally in `docker-compose.yml` instead of in a default.
+
+**A value containing `"` set through the Coolify UI does not reach the container intact.** Quotes in the compose file's own *defaults* are unaffected — it is only operator-supplied values that get mangled. This is why no `API_SUMMARY_*` variable carries JSON punctuation: a quoted value leaves the assembled string invalid, and `api` crash-loops on startup with `Parameter API_SUMMARY is not recognized`.
+
+**Coolify only auto-discovers a variable that is the *entire* value of a compose key.** Anything embedded in a larger string — as each `API_SUMMARY_*` variable is, inside `API_SUMMARY` — never appears in the Environment Variables UI, which is why they are each also declared on their own line in the `api` service purely to be discovered. Those extra declarations deliberately carry no default: Compose resolves `${VAR}` against the process environment and the `--env-file`, never against a sibling key in the same `environment:` block, so a default written there would still leave `""` inside `API_SUMMARY`. It would *appear* to work under Coolify, which persists discovered defaults into the env file it passes to Compose, while silently breaking a plain `docker compose up`.
+
+Related upstream bugs for the three behaviours above: [coollabsio/coolify#8851](https://github.com/coollabsio/coolify/issues/8851), [#3674](https://github.com/coollabsio/coolify/issues/3674), [#7542](https://github.com/coollabsio/coolify/issues/7542).
+
 
 ## Validating docker-compose.yml locally
 

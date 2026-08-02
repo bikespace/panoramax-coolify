@@ -15,9 +15,12 @@ KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
 EOF
 
 # /backups/keycloak is the kc_export volume, populated by the keycloak-export
-# service (see backup_architecture.md) — bundled here so both land in the same
-# nightly restic run.
-restic backup --host panoramax --tag config "$OUT" /backups/keycloak
+# service (see backup_architecture.md). /backups/branding is the branding volume
+# holding any operator-supplied logo/favicon/social image — it lives nowhere else
+# (not in git, not in the DB), so this is its only recovery path. Both are bundled
+# here so everything lands in the same nightly restic run; empty directories are
+# a no-op for restic.
+restic backup --host panoramax --tag config "$OUT" /backups/keycloak /backups/branding
 restic forget --host panoramax --tag config \
   --keep-daily "${RESTIC_KEEP_DAILY:-7}" \
   --keep-weekly "${RESTIC_KEEP_WEEKLY:-5}" \

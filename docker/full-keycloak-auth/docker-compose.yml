@@ -193,8 +193,9 @@ services:
       FLASK_SECRET_KEY: ${SERVICE_PASSWORD_64_FLASKSECRETKEY}
       FLASK_SESSION_COOKIE_DOMAIN: ${DOMAIN:-localhost}
       API_FORCE_AUTH_ON_UPLOAD: True
-      API_PICTURES_LICENSE_SPDX_ID: CC-BY-SA-4.0 # default pictures's license, change it if needed
-      API_PICTURES_LICENSE_URL: https://spdx.org/licenses/CC-BY-SA-4.0.html
+      # default pictures's license, change it if needed
+      API_PICTURES_LICENSE_SPDX_ID: ${API_PICTURES_LICENSE_SPDX_ID:-CC-BY-SA-4.0}
+      API_PICTURES_LICENSE_URL: ${API_PICTURES_LICENSE_URL:-https://spdx.org/licenses/CC-BY-SA-4.0.html}
       API_BLUR_URL: ${BLUR_API:-https://blur.panoramax.openstreetmap.fr}
       API_DERIVATES_PICTURES_PUBLIC_URL: ${S3_DERIVATES_PUBLIC_URL:?}
       API_PERMANENT_PICTURES_PUBLIC_URL: ${S3_PERMANENT_PUBLIC_URL:?}
@@ -206,16 +207,35 @@ services:
       NB_API_THREADS: 10
       # Default 2: Traefik (Coolify) + nginx (reverseproxy) both set X-Forwarded-For before reaching the API
       INFRA_NB_PROXIES: ${INFRA_NB_PROXIES:-2}
-      # API SUMMARY regroup many metadata about the instance
+      # API SUMMARY regroup many metadata about the instance, surfaced by the API
+      # and in federation listings. The API parses it as strict JSON.
       # check the documentation on how translations are handled: https://docs.panoramax.fr/backend/install/settings/#metadata
+      #
+      # Each field is separately overridable, one variable per language, and every
+      # value is plain text: the JSON punctuation stays here, literally, because of
+      # the Coolify limitations documented in CONTRIBUTING.md. To publish a language
+      # beyond en/fr, add it to the objects below. Operator docs:
+      # configuration_options.md.
+      #
+      # Listed here so that they show in the Coolify UI; defaults are in the
+      # API_SUMMARY block below.
+      API_SUMMARY_COLOR: ${API_SUMMARY_COLOR:-}
+      API_SUMMARY_LOGO: ${API_SUMMARY_LOGO:-}
+      API_SUMMARY_EMAIL: ${API_SUMMARY_EMAIL:-}
+      API_SUMMARY_NAME_EN: ${API_SUMMARY_NAME_EN:-}
+      API_SUMMARY_NAME_FR: ${API_SUMMARY_NAME_FR:-}
+      API_SUMMARY_DESCRIPTION_EN: ${API_SUMMARY_DESCRIPTION_EN:-}
+      API_SUMMARY_DESCRIPTION_FR: ${API_SUMMARY_DESCRIPTION_FR:-}
+      API_SUMMARY_GEO_COVERAGE_EN: ${API_SUMMARY_GEO_COVERAGE_EN:-}
+      API_SUMMARY_GEO_COVERAGE_FR: ${API_SUMMARY_GEO_COVERAGE_FR:-}
       API_SUMMARY: >-
         {
-          "color": "#abcdef",
-          "description": {"en": "a long description", "fr": "une description longue"},
-          "logo": "https://gitlab.com/panoramax/gitlab-profile/-/raw/main/images/logo.svg", 
-          "email": "the_administrator@mypanoramax.org",
-          "name": {"en": "${INSTANCE_NAME:-A Panoramax instance}", "fr": "Mon petit serveur des familles"},
-          "geo_coverage": {"en": "Anywhere you like", "fr": "Partout où le vent vous portera"}
+        "color": "${API_SUMMARY_COLOR:-#abcdef}",
+        "description": {"en": "${API_SUMMARY_DESCRIPTION_EN:-a long description}", "fr": "${API_SUMMARY_DESCRIPTION_FR:-une description longue}"},
+        "logo": "${API_SUMMARY_LOGO:-https://gitlab.com/panoramax/gitlab-profile/-/raw/main/images/logo.svg}",
+        "email": "${API_SUMMARY_EMAIL:-the_administrator@mypanoramax.org}",
+        "name": {"en": "${API_SUMMARY_NAME_EN:-A Panoramax instance}", "fr": "${API_SUMMARY_NAME_FR:-Mon petit serveur des familles}"},
+        "geo_coverage": {"en": "${API_SUMMARY_GEO_COVERAGE_EN:-Anywhere you like}", "fr": "${API_SUMMARY_GEO_COVERAGE_FR:-Partout où le vent vous portera}"}
         }
       API_REGISTRATION_IS_OPEN: ${API_REGISTRATION_IS_OPEN:-False} # True if the instance is open to registration, False if not, it is only used in the federation for the moment
     # No host port published: the API's only ingress is reverseproxy (nginx),
@@ -242,7 +262,8 @@ services:
       # documentation for configuration: https://docs.panoramax.fr/website/03_Settings/
       VITE_INSTANCE_NAME: ${INSTANCE_NAME:-A Panoramax instance}
       VITE_API_URL: /
-      VITE_TILES: https://panoramax.openstreetmap.fr/pmtiles/basic.json
+      # URL to a MapLibre JSON style (vector tiles)
+      VITE_TILES: ${VITE_TILES:-https://panoramax.openstreetmap.fr/pmtiles/basic.json}
       # optional metadata
       # The title for the <title> tag of the HTML
       VITE_TITLE: "${VITE_TITLE:-My Panoramax: The free alternative to photo-mapping territories}"
@@ -300,6 +321,12 @@ services:
     ports:
       - 80
     restart: always
+    # Operator-supplied logo/favicon/social image, served by the branding
+    # location blocks in nginx.conf. Empty by default — every asset falls back to
+    # the website's own. Files are copied in over SSH rather than committed; see
+    # configuration_options.md (Branding).
+    volumes:
+      - branding:/etc/nginx/branding
     depends_on:
       api:
         condition: service_healthy
@@ -379,9 +406,14 @@ services:
     volumes:
       - backup_scratch:/backups
       - kc_export:/backups/keycloak:ro # populated by keycloak-export
+      - branding:/backups/branding:ro # operator-supplied assets; lives only in this volume, not in git
 
 volumes:
   postgres_data:
     name: geovisio_auth_postgres_data
   backup_scratch:
   kc_export:
+  # Explicitly named (like postgres_data) so operators can find it on the host
+  # when copying branding files in.
+  branding:
+    name: geovisio_branding

@@ -20,20 +20,20 @@ Note that `PGHOST` and `PGUSER` are **not Coolify-settable at all** — they are
 
 | Variable        | Required                                  | Description                                                                                                                                    |
 | --------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `INSTANCE_NAME` | Optional (default `A Panoramax instance`) | The name of your instance which will appear in the top left of the website.                                                                    |
+| `INSTANCE_NAME` | Optional (default `A Panoramax instance`) | The name of your instance which will appear in the top left of the website. This sets the **website** only — the name the API publishes is `API_SUMMARY_NAME_EN`, which defaults to the same text but is set separately. Set both, or the site header and the API metadata will disagree; see [API and instance behaviour](#api-and-instance-behaviour). |
 | `DOMAIN`        | **Required**                              | URL of your own domain (without a scheme or a path, just the domain). Must match the domain you set for the `reverseproxy` service in Coolify. |
 
 ## Secrets
 
 The five secrets below are **auto-generated** by Coolify. Each is wired up in `docker-compose.yml` as a Magic Environment Variable, which Coolify fills with a fresh 64-character alphanumeric value the first time the compose file is loaded and reuses across every service that references it. On a normal new install there is nothing to type in for these. In the Coolify **Environment Variables** UI they appear under their `SERVICE_PASSWORD_64_*` names, so each row lists both the name the container sees and the name you'll find in Coolify.
 
-| Variable (in the container) | Name in the Coolify UI                       | Description                                                                                                                                                                                                                                               |
-| --------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OAUTH_CLIENT_SECRET`       | `SERVICE_PASSWORD_64_OAUTHCLIENTSECRET`      | A secret key for the geovisio oauth client in keycloak.                                                                                                                                                                                                   |
-| `FLASK_SECRET_KEY`          | `SERVICE_PASSWORD_64_FLASKSECRETKEY`         | [Flask's secret key](https://flask.palletsprojects.com/en/3.0.x/config/#SECRET_KEY). A secret key used among other things for securely signing the session cookie. Flask's docs ask for a long random string; the 64-char generated value satisfies that. |
-| `KEYCLOAK_ADMIN_PASSWORD`   | `SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD`  | Password of the Keycloak admin account.                                                                                                                                                                                                                   |
-| `PG_PASSWORD`               | `SERVICE_PASSWORD_64_PGPASSWORD`             | Password of the postgres db account. Used inside `postgres://` connection strings, which is why the no-symbol `SERVICE_PASSWORD_64_*` form is used (a symbol like `@` or `/` would corrupt the URL).                                                      |
-| `KC_DB_PASSWORD`            | `SERVICE_PASSWORD_64_KCDBPASSWORD`           | Password for the `keycloak_user` postgres account (used by Keycloak to connect to its DB schema). Also embedded in a connection string — same no-symbol reasoning as `PG_PASSWORD`.                                                                       |
+| Variable (in the container) | Name in the Coolify UI                      | Description                                                                                                                                                                                                                                               |
+| --------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OAUTH_CLIENT_SECRET`       | `SERVICE_PASSWORD_64_OAUTHCLIENTSECRET`     | A secret key for the geovisio oauth client in keycloak.                                                                                                                                                                                                   |
+| `FLASK_SECRET_KEY`          | `SERVICE_PASSWORD_64_FLASKSECRETKEY`        | [Flask's secret key](https://flask.palletsprojects.com/en/3.0.x/config/#SECRET_KEY). A secret key used among other things for securely signing the session cookie. Flask's docs ask for a long random string; the 64-char generated value satisfies that. |
+| `KEYCLOAK_ADMIN_PASSWORD`   | `SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD` | Password of the Keycloak admin account.                                                                                                                                                                                                                   |
+| `PG_PASSWORD`               | `SERVICE_PASSWORD_64_PGPASSWORD`            | Password of the postgres db account. Used inside `postgres://` connection strings, which is why the no-symbol `SERVICE_PASSWORD_64_*` form is used (a symbol like `@` or `/` would corrupt the URL).                                                      |
+| `KC_DB_PASSWORD`            | `SERVICE_PASSWORD_64_KCDBPASSWORD`          | Password for the `keycloak_user` postgres account (used by Keycloak to connect to its DB schema). Also embedded in a connection string — same no-symbol reasoning as `PG_PASSWORD`.                                                                       |
 
 The Coolify-side names squash the underscores out of the container-facing names deliberately: the `ID`/`IDENTIFIER` portion of a magic-variable name must be letters only, and Coolify silently generates nothing if it contains an underscore — see [coollabsio/coolify#11043](https://github.com/coollabsio/coolify/issues/11043#issuecomment-5152246623). Keep that constraint in mind if you ever add another magic variable.
 
@@ -78,12 +78,52 @@ These carry no credentials — they are used by clients to fetch images directly
 
 ## API and instance behaviour
 
-| Variable                   | Required                                                     | Description                                                                                                                                                                                                                                                                                                                                            |
-| -------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GEOVISIO_IMAGE_TAG`       | Optional (default `latest`)                                  | Tag of the `panoramax/api` image to deploy. Pin to a specific version (e.g. `1.2.3`) to control when you upgrade, or leave as `latest` to always pull the newest release.                                                                                                                                                                              |
-| `INFRA_NB_PROXIES`         | Optional (default `2`)                                       | Number of proxies in front of GeoVisio. The default of 2 accounts for Traefik (Coolify) plus nginx, both of which set `X-Forwarded-For`. This parameter is used so that geovisio can trust the `X-Forwarded-` headers for URL generation (more details in the [Flask documentation](https://flask.palletsprojects.com/en/2.2.x/deploying/proxy_fix/)). |
-| `API_REGISTRATION_IS_OPEN` | Optional (default `False`)                                   | Whether the instance is open to self-registration (shown in the website UI and federation metadata). Leave as `False` if account creation is admin-only.                                                                                                                                                                                               |
-| `BLUR_API`                 | Optional (default `https://blur.panoramax.openstreetmap.fr`) | Change this if you have your own blur API instance.                                                                                                                                                                                                                                                                                                    |
+| Variable                       | Required                                                         | Description                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GEOVISIO_IMAGE_TAG`           | Optional (default `latest`)                                      | Tag of the `panoramax/api` image to deploy. Pin to a specific version (e.g. `1.2.3`) to control when you upgrade, or leave as `latest` to always pull the newest release.                                                                                                                                                                              |
+| `INFRA_NB_PROXIES`             | Optional (default `2`)                                           | Number of proxies in front of GeoVisio. The default of 2 accounts for Traefik (Coolify) plus nginx, both of which set `X-Forwarded-For`. This parameter is used so that geovisio can trust the `X-Forwarded-` headers for URL generation (more details in the [Flask documentation](https://flask.palletsprojects.com/en/2.2.x/deploying/proxy_fix/)). |
+| `API_REGISTRATION_IS_OPEN`     | Optional (default `False`)                                       | Whether the instance is open to self-registration (shown in the website UI and federation metadata). Leave as `False` if account creation is admin-only.                                                                                                                                                                                               |
+| `BLUR_API`                     | Optional (default `https://blur.panoramax.openstreetmap.fr`)     | Change this if you have your own blur API instance.                                                                                                                                                                                                                                                                                                    |
+| `API_PICTURES_LICENSE_SPDX_ID` | Optional (default `CC-BY-SA-4.0`)                                | SPDX id of the picture's license. If none is set, the pictures's license is considered to be proprietary.                                                                                                                                                                                                                                              |
+| `API_PICTURES_LICENSE_URL`     | Optional (default `https://spdx.org/licenses/CC-BY-SA-4.0.html`) | URL for the license.                                                                                                                                                                                                                                                                                                                                   |
+| `API_SUMMARY_NAME_EN`          | Recommended (default `A Panoramax instance`)                     | Short name of the instance, as it appears in the API and in federation listings. Set this to match `INSTANCE_NAME`. |
+| `API_SUMMARY_NAME_FR`          | Optional (default `Mon petit serveur des familles`)              | French translation of the above. The default is upstream's placeholder — set it, or drop the field entirely (see the notes below).                                                                                                                                                                                                |
+| `API_SUMMARY_DESCRIPTION_EN`   | Recommended (default `a long description`)                       | Longer description of the instance. |
+| `API_SUMMARY_DESCRIPTION_FR`   | Optional (default `une description longue`)                      | French translation of the above.                                                                                                                                                                                                                                                                                                  |
+| `API_SUMMARY_GEO_COVERAGE_EN`  | Recommended (default `Anywhere you like`)                        | The geographic area the instance covers. |
+| `API_SUMMARY_GEO_COVERAGE_FR`  | Optional (default `Partout où le vent vous portera`)             | French translation of the above.                                                                                                                                                                                                                                                                                             |
+| `API_SUMMARY_COLOR`            | Optional (default `#abcdef`)                                     | HTML colour code used as the instance's accent colour.                                                                                                                                                                                                                                                                                                 |
+| `API_SUMMARY_LOGO`             | Optional (default is the generic Panoramax logo)                 | URL of an SVG logo for the instance. This is the logo published in the API metadata; it is separate from the logo shown on the website, which is a file — see [Branding](#branding-logo-favicon-social-image).                                                                                                                                          |
+| `API_SUMMARY_EMAIL`            | Recommended (default `the_administrator@mypanoramax.org`)        | Public contact address for the instance administrator.                                                                                                                                                                                                                                                                                                 |
+
+More assistance with these options can be found in the [Panoramax API documentation](https://docs.panoramax.fr/backend/install/settings/).
+
+### Setting the `API_SUMMARY_*` fields
+
+The API publishes a single `API_SUMMARY` JSON object describing the instance. That object is assembled in `docker-compose.yml` from the variables above, so **there is no `API_SUMMARY` variable to set** — you set the fields individually, and each one you leave alone keeps its default.
+
+> **Every value is plain text.** Type the words you want and nothing else — no quotes, no braces, no JSON punctuation of any kind. All the JSON structure lives in `docker-compose.yml`; the variables only fill in the text between the quotes.
+
+```
+API_SUMMARY_NAME_EN=Panoramax Ontario
+API_SUMMARY_DESCRIPTION_EN=Street-level imagery for Ontario
+API_SUMMARY_GEO_COVERAGE_EN=Ontario, Canada
+API_SUMMARY_COLOR=#123456
+API_SUMMARY_EMAIL=admin@example.org
+```
+
+This restriction is not cosmetic, and it is Coolify's rather than Docker's. A quoted value set in the Coolify UI does not reach the container intact; the API then fails to parse the assembled JSON and the `api` container crash-loops on startup with `Parameter API_SUMMARY is not recognized`. Note that this is the opposite of the single-quote advice for [`VITE_RASTER_TILE`](#other-website-options), which is a genuine JSON value substituted into the website's JavaScript — these are not, so do not quote them.
+
+**Expect them to appear blank in the Coolify UI.** Coolify only discovers a variable that is the entire value of a compose key, and inside `API_SUMMARY` these are embedded in a larger string, so `docker-compose.yml` also declares each one on its own line purely so that the UI lists them. Those declarations carry no default, so a variable you have not set shows as empty — empty means "using the default from the table above", not "blank in the API". Fill in the ones you want and leave the rest alone.
+
+**Languages.** The instance ships with English and French, French being upstream's placeholder text. To publish a different set of languages, edit the `API_SUMMARY` block in `docker-compose.yml` directly and add or delete entries from the `name`, `description` and `geo_coverage` objects — the same kind of edit as changing the number of picture workers. Upstream requires `en` as a minimum. Setting a `_FR` variable to an empty string does **not** remove the French text; an empty value falls back to the default, so delete the field in `docker-compose.yml` instead.
+
+Note that `INSTANCE_NAME` does **not** feed these fields — it sets the website header only. To keep the site and the API metadata consistent, set `API_SUMMARY_NAME_EN` to match it.
+
+**Number of picture workers:** not an environment variable — add or remove `background-worker-N` services in `docker-compose.yml` to adjust the count.
+
+**SMTP** is not configured via env vars. The realm imports with no email settings, and Keycloak sends no verification/reset emails until an admin configures SMTP manually in the Keycloak console (Realm settings > Email).
+
 
 ## Website
 
@@ -93,14 +133,83 @@ These carry no credentials — they are used by clients to fetch images directly
 | `VITE_TITLE`            | Optional                    | The title for the `<title>` tag of the HTML. Defaults to `My Panoramax: The free alternative to photo-mapping territories`. |
 | `VITE_META_TITLE`       | Optional                    | The title used in meta tags. Same default as `VITE_TITLE`.                                                                  |
 | `VITE_META_DESCRIPTION` | Optional                    | The description for meta tags, which is useful for SEO. Defaults to a generic description of Panoramax.                     |
+| `VITE_TILES`            | Optional                    | URL to a MapLibre JSON style (vector tiles)                                                                                 |
 
-Further website settings are documented in the [Panoramax website settings docs](https://docs.panoramax.fr/website/03_Settings/); only the variables above are wired up to Coolify in this deployment.
 
----
+### Other Website Options
 
-**Number of picture workers:** not an environment variable — add or remove `background-worker-N` services in `docker-compose.yml` to adjust the count.
+Further website settings are documented in the [Panoramax website settings docs](https://docs.panoramax.fr/website/03_Settings/); only the variables above are wired up to Coolify in this deployment by default.
 
-**SMTP** is not configured via env vars. The realm imports with no email settings, and Keycloak sends no verification/reset emails until an admin configures SMTP manually in the Keycloak console (Realm settings > Email).
+Most of the variables can just be added manually in the Coolify UI. Some tips on a handful of the options are included below:
+
+`VITE_ZOOM` and `VITE_CENTER`: you can ignore these; they may only be important in the case where there are no sequences uploaded. Otherwise, the map appears to default to a zoom and centre that shows all the existing sequences.
+
+The website image substitutes some URL vars (e.g. `VITE_TILES`) with `sed -i "s|DOCKER_VITE_TILES|$VITE_TILES|g"` and does not escape the replacement. An unescaped `&` expands to the matched text, so a URL with more than one query parameter — `?key=…&language=en` — will be corrupted. A single `?key=…` is safe.
+
+For inline JSON values like `VITE_RASTER_TILE`, make sure to use single quotes; double quotes seem to cause issues when parsed by Coolify. The "multiline" option also seems to cause issues, so for more complex JSON entries, edit it in an external file and then paste it in; Coolify will one-line it for you when you paste.
+
+An example template for raster tiles:
+
+```json
+{
+  'type': 'raster',
+  'tiles': ['https://gis.toronto.ca/arcgis/rest/services/basemap/cot_ortho/MapServer/tile/{z}/{y}/{x}'],
+  'tileSize': 256,
+  'minzoom': 0,
+  'maxzoom': 21,
+  'bounds': [-79.664992, 43.562500, -79.087180, 43.877064],
+  'attribution':' City of Toronto'
+}
+```
+
+
+### Branding (logo, favicon, social image)
+
+These are **files, not environment variables.** The upstream `panoramax/website` image bakes its logo, favicon and social preview image in when it is built, so they cannot be set from the Coolify UI. Instead, the `reverseproxy` (nginx) service serves replacements out of a `branding` volume and falls back to the website's own asset whenever a file is absent — so an empty volume behaves exactly like a stock deployment, and each asset can be overridden on its own.
+
+Put a file in the volume under one of these names and it takes over the matching URL:
+
+| File in the volume | Replaces                      | Notes                                                           |
+| ------------------ | ----------------------------- | --------------------------------------------------------------- |
+| `logo.png`         | The site header/footer logo   | Square image works best.                                        |
+| `logo-small.png`   | The small logo variant        | Optional; falls back independently of `logo.png`.               |
+| `favicon.svg`      | The browser tab icon          | Square SVG that still reads well at small sizes.                |
+| `favicon-192.png`  | PWA icon, 192×192             | Used by an installed/home-screen shortcut, via `manifest.json`. |
+| `favicon-512.png`  | PWA icon, 512×512             | Same as above.                                                  |
+| `meta-img.jpg`     | Open Graph link-preview image | 1200×630 px for social platforms.                               |
+
+Replacing only `favicon.svg` still leaves the Panoramax mark on an installed home-screen shortcut — that uses the two PNGs.
+
+To install one, copy it into the running `reverseproxy` container (the volume is mounted at `/etc/nginx/branding`):
+
+```bash
+# 1. Get the file onto the Coolify host
+scp your_logo.png you@your-server:/tmp/logo.png
+
+# 2. Find the reverseproxy container (see the appendix in deployment_instructions.md)
+docker ps --format '{{.ID}}\t{{.Names}}' | grep reverseproxy
+
+# 3. Copy it in, and make sure nginx's worker can read it
+docker cp /tmp/logo.png <container-id>:/etc/nginx/branding/logo.png
+docker exec <container-id> chmod 644 /etc/nginx/branding/logo.png
+```
+
+To revert a single asset, delete it: `docker exec <container-id> rm /etc/nginx/branding/logo.png`.
+
+Things worth knowing:
+
+- **Changes take effect immediately** — no restart and no redeploy. You may need a hard refresh, since these are cached in the browser for an hour.
+- **`chmod 644` matters.** `docker cp` preserves the source file's permissions. A file nginx cannot read does *not* fall back — it returns `403` and the asset breaks (a missing logo rather than the Panoramax one).
+- **Mistakes are silent by design.** A misspelled filename does not produce a `404`; the request just falls back to the Panoramax default. To confirm an override actually took, compare the bytes:
+
+  ```bash
+  curl -s https://<your-domain>/panoramax_favicon.svg | shasum -a 256
+  shasum -a 256 favicon.svg   # should match
+  ```
+
+  The logo lives at a hashed URL that changes with each website release, so look up its current name rather than guessing: `docker exec <website-container> ls /usr/share/nginx/html/assets/ | grep logo`.
+- **The volume survives redeploys**, and its contents are included in the nightly config backup, so branding is restored along with everything else.
+
 
 ---
 
