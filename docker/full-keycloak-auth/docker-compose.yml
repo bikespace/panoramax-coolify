@@ -56,6 +56,18 @@ services:
     restart: "no"
     exclude_from_hc: true
     environment:
+      # This is the first Keycloak process to touch the DB after an image bump,
+      # so it must apply Keycloak's schema migrations. kc.sh import (non-server
+      # mode) refuses an outdated schema unless told to migrate ("Database not
+      # up-to-date, please enable database migration"), which would block auth
+      # on every Keycloak upgrade.
+      KC_SPI_CONNECTIONS_JPA__QUARKUS__MIGRATION_STRATEGY: update
+      # Keycloak creates the bootstrap admin only while initialising the master
+      # realm — and on a fresh database that happens here, in the import, not in
+      # auth. Without these the instance ends up with no master-realm admin.
+      # auth keeps them too: the kcadm.sh runbook snippets read them there.
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD}
       # Placeholders in keycloak-realm.json
       GEOVISIO_BASE_URL: https://${DOMAIN:?}
       GEOVISIO_CLIENT_SECRET: ${SERVICE_PASSWORD_64_OAUTHCLIENTSECRET}
@@ -75,7 +87,7 @@ services:
     environment:
       # Keycloak admin account
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
-      KC_BOOTSTRAP_ADMIN_USERNAME_PASSWORD: ${SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD}
 
       # Database connection
       # note: keycloak uses the same database as geovisio, in a separate schema, this way there is only 1 database to backup
@@ -90,8 +102,6 @@ services:
       KC_HTTP_ENABLED: true
       # trust nginx to set the correct xforwarded headers with the hostname
       KC_HOSTNAME_STRICT: false
-      # Enable health endpoint on management port (9000) at /health/ready
-      KC_HTTP_MANAGEMENT_HEALTH_ENABLED: "true"
 
       # SMTP is not configured here — the realm imports with an empty
       # smtpServer, and email features (password reset, verification) won't
@@ -113,18 +123,15 @@ services:
       keycloak-import:
         condition: service_completed_successfully
     healthcheck:
-      # Health endpoints are not reliably available in this Keycloak 26 build.
-      # This used to send a real GET to /oauth/realms/master and check for a
-      # 200 (proving the DB is up, the realm is loaded, and Keycloak is
-      # actually serving) — but that only succeeds once realm import fully
-      # finishes, and observed startup + import time exceeded some restart
-      # supervisor's timeout on Coolify (well under docker-compose's own
-      # start_period), causing an endless restart loop before the app ever
-      # got a chance to become ready. Downgraded to a bare TCP-connect check,
-      # which succeeds as soon as the port is listening — a liveness check,
-      # not a true readiness check. Dependents (e.g. website) may see a few
-      # seconds of 503s from auth immediately after it's marked healthy.
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080 && exec 3<&-"]
+      # Readiness check, same as upstream: HEAD /oauth/health/ready on the
+      # management port (9000). No curl in the Keycloak image, hence bash's
+      # /dev/tcp. The /oauth prefix is required — the management interface
+      # inherits KC_HTTP_RELATIVE_PATH — so a bare /health/ready always 404s.
+      # This replaced a TCP-connect liveness check that was adopted while realm
+      # import still ran inside auth's own startup and outlasted Coolify's
+      # restart timeout; the import now runs in keycloak-import, so auth comes
+      # up quickly. If auth ever restart-loops on Coolify, suspect this first.
+      test: ["CMD-SHELL", "{ printf 'HEAD /oauth/health/ready HTTP/1.0\\r\\n\\r\\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000"]
       timeout: 5s
       interval: 5s
       retries: 5
