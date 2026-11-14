@@ -6,18 +6,20 @@ How the code in this directory works, and why it's built this way. This is an or
 
 Everything runs inside one small `backup` sidecar container defined in `docker-compose.yml`, driven by [`supercronic`](https://github.com/aptible/supercronic) (a container-friendly cron). Working files are written under `/backups` inside the container (a scratch volume), then shipped externally.
 
-| File                    | Role                                                                                                                       |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `Dockerfile`            | Alpine base with `postgresql16-client`, `rclone`, `restic`, `gettext` (for `envsubst`), and a pinned `supercronic` binary. |
-| `entrypoint.sh`         | Renders the crontab from env vars, initialises the restic repo if needed, then execs supercronic.                          |
-| `crontab.template`      | The four scheduled jobs, with schedules as `${VAR}` placeholders.                                                          |
-| `backup-db.sh`          | Postgres dumps → restic.                                                                                                   |
-| `backup-images.sh`      | Permanent pictures, production S3 → backup S3, via rclone.                                                                 |
-| `backup-config.sh`      | Secrets + Keycloak realm export → restic.                                                                                  |
-| `backup-now.sh`         | Runs the three backup jobs back-to-back; manual entrypoint.                                                                |
-| `restic-check.sh`       | Weekly repository integrity check.                                                                                         |
-| `backup-healthcheck.sh` | Container healthcheck; asserts each job succeeded recently.                                                                |
-| `fix-object-acls.sh`    | Standalone repair tool for object ACLs — not part of the automated jobs.                                                   |
+| File                            | Role                                                                                                                       |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `Dockerfile`                    | Alpine base with `postgresql16-client`, `rclone`, `restic`, `gettext` (for `envsubst`), and a pinned `supercronic` binary. |
+| `entrypoint.sh`                 | Renders the crontab from env vars, initialises the restic repo if needed, then execs supercronic.                          |
+| `crontab.template`              | The four scheduled jobs, with schedules as `${VAR}` placeholders.                                                          |
+| `backup-db.sh`                  | Postgres dumps → restic.                                                                                                   |
+| `backup-images.sh`              | Permanent pictures, production S3 → backup S3, via rclone.                                                                 |
+| `backup-config.sh`              | Secrets + Keycloak realm export → restic.                                                                                  |
+| `backup-now.sh`                 | Runs the three backup jobs back-to-back; manual entrypoint.                                                                |
+| `restic-check.sh`               | Weekly repository integrity check.                                                                                         |
+| `backup-healthcheck.sh`         | Container healthcheck; asserts each job succeeded recently.                                                                |
+| `fix-object-acls.sh`            | Standalone repair tool for object ACLs — not part of the automated jobs.                                                   |
+| `migrate-derivatives-prefix.sh` | One-off copy of the derivatives cache to a new prefix in the same bucket (see `upgrade_instructions.md`). Never deletes.   |
+| `s3-url.sh`                     | Sourced helper, not a job: parses a production storage URL (`FS_*_URL`) into an rclone connection string.                  |
 
 ## Why two tools
 
@@ -46,14 +48,14 @@ Three steps, then a marker file:
 
 Uses rclone "connection strings" so **no config file is needed** — everything comes from env.
 
-The notable design choice is that the *source* side is parsed out of `FS_PERMANENT_URL` rather than re-entered as separate variables. `FS_PERMANENT_URL` is already configured for the api/background-worker services and is passed unchanged to the `backup` service, so production credentials live in exactly one place. The script decomposes the `s3://ACCESS_KEY:SECRET_KEY@bucket/prefix?endpoint_url=<url-encoded>&region=<region>` form with shell parameter expansion and `sed`, percent-decoding the secret key and endpoint.
+The notable design choice is that the *source* side is parsed out of `FS_PERMANENT_URL` rather than re-entered as separate variables. `FS_PERMANENT_URL` is already configured for the api/background-worker services and is passed unchanged to the `backup` service, so production credentials live in exactly one place. The parsing lives in `s3-url.sh` (`parse_fs_s3_url`), which `backup-images.sh`, `prune-orphan-images.sh` and `migrate-derivatives-prefix.sh` all source. It decomposes the `s3://ACCESS_KEY:SECRET_KEY@bucket/prefix?endpoint_url=<url-encoded>&region=<region>` form with shell parameter expansion and `sed`, percent-decoding the secret key and endpoint.
 
-Two constraints worth knowing before editing it:
+Two constraints worth knowing before editing `s3-url.sh`:
 
 - Endpoint and region are **single-quoted** inside the connection string. They may contain `:` (e.g. `https://host`), which rclone would otherwise misread as the connection-string/path separator.
-- The parsing assumes `FS_PERMANENT_URL` uses the `s3://` scheme. If production storage moves to a different PyFilesystem backend, build the source connection string manually instead.
+- The parsing assumes the storage URL uses the `s3://` scheme (`parse_fs_s3_url` fails otherwise). If production storage moves to a different PyFilesystem backend, build the source connection string manually instead.
 
-The destination is `${BACKUP_S3_BUCKET}/images/permanent`. Only the **permanent** prefix is referenced — `derivatives/` and `tmp/` are never touched. That is the space saving.
+The destination is `${BACKUP_S3_BUCKET}/images/permanent`. Only the **permanent** prefix is referenced — the derivatives and `tmp` prefixes are never touched. That is the space saving.
 
 ## `backup-config.sh`
 

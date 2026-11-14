@@ -1,23 +1,12 @@
 #!/bin/sh
 set -eu
 
-# --- Parse production creds/bucket out of FS_PERMANENT_URL (no separate vars needed) ---
-# Format: s3://ACCESS_KEY:SECRET_KEY@bucket/prefix?endpoint_url=<url-encoded>&region=<region>
-rest=${FS_PERMANENT_URL#s3://}
-creds=${rest%%@*}
-after_at=${rest#*@}
-SRC_ACCESS_KEY=${creds%%:*}
-secret_enc=${creds#*:}
-SRC_SECRET_KEY=$(printf '%b' "$(echo "$secret_enc" | sed 's/%/\\x/g')")
-SRC_BUCKET_PATH=${after_at%%\?*}
-query=${after_at#*\?}
-endpoint_enc=$(echo "$query" | sed -n 's/.*endpoint_url=\([^&]*\).*/\1/p')
-SRC_ENDPOINT=$(printf '%b' "$(echo "$endpoint_enc" | sed 's/%/\\x/g')")
-SRC_REGION=$(echo "$query" | sed -n 's/.*region=\([^&]*\).*/\1/p')
+# --- Production creds/bucket come from FS_PERMANENT_URL (no separate vars needed) ---
+# Parsing lives in s3-url.sh, shared with the other production-S3 scripts.
+# shellcheck source-path=SCRIPTDIR source=s3-url.sh
+. "$(dirname "$0")/s3-url.sh"
+parse_fs_s3_url "$FS_PERMANENT_URL"
 
-# endpoint/region are single-quoted: they may contain ':' (e.g. "https://host")
-# which would otherwise be misread as the connection-string/path separator.
-SRC=":s3,provider=Other,access_key_id=${SRC_ACCESS_KEY},secret_access_key=${SRC_SECRET_KEY},endpoint='${SRC_ENDPOINT}',region='${SRC_REGION}':${SRC_BUCKET_PATH}"
 DST=":s3,provider=Other,access_key_id=${BACKUP_S3_ACCESS_KEY},secret_access_key=${BACKUP_S3_SECRET_KEY},endpoint='${BACKUP_S3_ENDPOINT}',region='${BACKUP_S3_REGION}':${BACKUP_S3_BUCKET}/images/permanent"
 
 # 'sync' (default) makes the backup an exact mirror of production's permanent

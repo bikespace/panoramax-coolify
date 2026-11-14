@@ -395,6 +395,7 @@ services:
       KC_DB_PASSWORD: ${SERVICE_PASSWORD_64_KCDBPASSWORD}
       KEYCLOAK_ADMIN_PASSWORD: ${SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD}
       FS_PERMANENT_URL: ${FS_PERMANENT_URL:?} # reused from the api/background-worker config
+      FS_DERIVATIVES_URL: ${FS_DERIVATIVES_URL:?} # only used by the one-off migrate-derivatives-prefix.sh
       RESTIC_PASSWORD: ${RESTIC_PASSWORD:?}
       RESTIC_REPOSITORY: s3:${BACKUP_S3_ENDPOINT:?}/${BACKUP_S3_BUCKET:?}/restic
       AWS_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY:?} # restic's S3 backend reads these names
