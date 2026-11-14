@@ -395,7 +395,7 @@ Its output is hex (only digits and `a`–`f`, no symbols at all), so the same va
 | `OAUTH_CLIENT_SECRET` (`SERVICE_PASSWORD_64_OAUTHCLIENTSECRET`)              | Keycloak `geovisio` client (realm import, one-time)  | **Yes** — update it in Keycloak *and* the env var, in sync (§7.2)  |
 | `PG_PASSWORD` (`SERVICE_PASSWORD_64_PGPASSWORD`)                             | Postgres `gvs` role (set at first DB init only)      | **Yes** — `ALTER USER gvs …` in the DB (§7.3)                      |
 | `KC_DB_PASSWORD` (`SERVICE_PASSWORD_64_KCDBPASSWORD`)                        | Postgres `keycloak_user` role (first DB init only)   | **Yes** — `ALTER USER keycloak_user …` in the DB (§7.3)            |
-| `KEYCLOAK_ADMIN_PASSWORD` (`SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD`)      | Keycloak master-realm admin user (first `auth` boot) | **Yes** — reset inside Keycloak; env var alone does nothing (§7.4) |
+| `KEYCLOAK_ADMIN_PASSWORD` (`SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD`)      | Keycloak master-realm admin user (first DB init)     | **Yes** — reset inside Keycloak; env var alone does nothing (§7.4) |
 | `RESTIC_PASSWORD`                                                            | the encryption of the entire restic repo             | **Yes, critical** — re-key the repo *before* the env var (§7.5)    |
 | Production S3 keys (in `FS_TMP_URL`/`FS_PERMANENT_URL`/`FS_DERIVATIVES_URL`) | nothing in the DB                                    | Rotate at vendor, update all three URLs (§7.6)                     |
 | Backup S3 keys (`BACKUP_S3_ACCESS_KEY`/`BACKUP_S3_SECRET_KEY`)               | nothing in the DB                                    | Rotate at vendor, update both vars (§7.6)                          |
@@ -452,9 +452,9 @@ The simplest correct approach is to update the value and redeploy the whole stac
 
 ### 7.4 `KEYCLOAK_ADMIN_PASSWORD`
 
-The Keycloak master-realm admin password is bootstrapped into the DB the first time `auth` starts (from `KC_BOOTSTRAP_ADMIN_PASSWORD`) and then hashed and stored. Changing the env var afterward has **no effect** on the stored password — you must reset it inside Keycloak.
+The Keycloak master-realm admin password is bootstrapped into the DB when Keycloak first initialises the database, in `keycloak-import` (from `KC_BOOTSTRAP_ADMIN_PASSWORD`), and then hashed and stored. Changing the env var afterward has **no effect** on the stored password — you must reset it inside Keycloak.
 
-Via the Keycloak Admin Console (master realm): Users → the admin user (`admin` by default) → **Credentials** → **Reset password** → set a new one (untick "Temporary").
+Via the Keycloak Admin Console (master realm): Users → the admin user (the `KEYCLOAK_ADMIN` username) → **Credentials** → **Reset password** → set a new one (untick "Temporary").
 
 Or via `kcadm.sh`:
 

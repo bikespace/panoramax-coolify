@@ -166,17 +166,59 @@ On first deploy Keycloak will import the realm automatically. The `migrations` s
 
 ## 6. After deploying
 
+- Replace Keycloak's temporary admin account with a permanent one — see [6.1](#61-replace-the-temporary-keycloak-admin) below.
 - Configure SMTP manually in the Keycloak admin console (`<YOUR_INSTANCE_DOMAIN>/oauth`, Realm settings > Email). It is deliberately left out of the automated realm import, so password reset and email verification will not work until you set it up.
 - Confirm the automatic backups are running — see [Confirming backups work on a new instance](./backup_and_restore_instructions.md#confirming-backups-work-on-a-new-instance).
-- Harden the Keycloak `master` realm — see [6.1](#61-keycloak-realm-hardening) below.
+- Harden the Keycloak `master` realm — see [6.2](#62-keycloak-realm-hardening) below.
 
-### 6.1 Keycloak realm hardening
+### 6.1 Replace the temporary Keycloak admin
+
+On first deploy, Keycloak creates a master-realm admin from `KEYCLOAK_ADMIN` (default `admin`) and the generated `KEYCLOAK_ADMIN_PASSWORD`. Keycloak 26 marks that account as **temporary**, and the admin console shows a banner saying so until it is replaced. The account works, but Keycloak intends it only for initial setup, so replace it with a permanent admin.
+
+The simplest replacement keeps the same password and changes only the username. That way, only `KEYCLOAK_ADMIN` changes in Coolify, and the `kcadm.sh` snippets in these docs, which read the username and password from the `auth` container's environment, keep working. Pick a new username and use it in place of `<new-admin-username>` below. Find the `auth` container name per the [appendix](#appendix-running-commands-in-docker).
+
+**1. Create the permanent admin**, with the same password and the master realm's `admin` role:
+
+```bash
+docker exec -it <auth_container_name> sh -c '
+K=/opt/keycloak/bin/kcadm.sh
+$K config credentials --server http://localhost:8080/oauth --realm master \
+  --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_PASSWORD"
+$K create users -r master -s username=<new-admin-username> -s enabled=true
+$K set-password -r master --username <new-admin-username> --new-password "$KC_BOOTSTRAP_ADMIN_PASSWORD"
+$K add-roles -r master --uusername <new-admin-username> --rolename admin
+'
+```
+
+Or in the admin console (master realm): Users → **Add user** → set the username → **Create**. Then on the **Credentials** tab, set the password with *Temporary* off. Then on the **Role mapping** tab, choose **Assign role** and assign the `admin` realm role.
+
+**2. Check the new account.** In a private browser window, log in to `<YOUR_INSTANCE_DOMAIN>/oauth/admin` as the new user. The temporary-admin banner should be gone, and you should be able to open the `geovisio` realm.
+
+**3. Delete the temporary account**, logged in as the new user:
+
+```bash
+docker exec -it <auth_container_name> sh -c '
+K=/opt/keycloak/bin/kcadm.sh
+$K config credentials --server http://localhost:8080/oauth --realm master \
+  --user <new-admin-username> --password "$KC_BOOTSTRAP_ADMIN_PASSWORD"
+ID=$($K get users -r master -q username="$KC_BOOTSTRAP_ADMIN_USERNAME" -q exact=true --fields id --format csv --noquotes)
+$K delete users/$ID -r master
+'
+```
+
+Or in the admin console: Users → the old admin user → **Delete**.
+
+**4. Set `KEYCLOAK_ADMIN` in Coolify to the new username** and redeploy. Keycloak creates a bootstrap admin only while it initialises a brand-new master realm, so the redeploy won't recreate the deleted account. It does update `$KC_BOOTSTRAP_ADMIN_USERNAME` in the containers, so the `kcadm.sh` snippets log in as the new admin, and the next nightly backup records the new username in `secrets.env`.
+
+Optionally, while logged in, require an authenticator app for the new admin: Users → your user → *Required user actions* → **Configure OTP**. The admin console is reachable from the internet, so a second factor is a cheap extra layer on top of the brute-force protection in 6.2.
+
+### 6.2 Keycloak realm hardening
 
 The imported `geovisio` realm ships hardened: brute-force detection is **on** (temporary lockout after 10 failed logins), a password policy requires a minimum of 12 characters that can't equal the username, the unused direct-access-grant (password) flow is disabled on the `geovisio` client, that client's token scope is least-privilege (`fullScopeAllowed: false`), and refresh-token rotation is on (`revokeRefreshToken: true`). On a **fresh** deploy you get all of this automatically and there's nothing to do here.
 
 Two cases still need a manual step:
 
-**(a) Master realm (recommended for every instance).** The admin-console login lives in Keycloak's `master` realm, which is created by Keycloak itself at first boot and is *not* part of the realm import — so it does **not** inherit the settings above. It is publicly reachable at `<YOUR_INSTANCE_DOMAIN>/oauth/admin`. The `admin` account is already protected by the strong generated `KEYCLOAK_ADMIN_PASSWORD` (a password policy there adds little for a single admin), so the step that matters is enabling brute-force detection on `master`:
+**(a) Master realm (recommended for every instance).** The admin-console login lives in Keycloak's `master` realm, which is created by Keycloak itself at first boot and is *not* part of the realm import — so it does **not** inherit the settings above. It is publicly reachable at `<YOUR_INSTANCE_DOMAIN>/oauth/admin`. The admin account is already protected by the strong generated `KEYCLOAK_ADMIN_PASSWORD` (a password policy there adds little for a single admin), so the step that matters is enabling brute-force detection on `master`:
 
 - Admin console: switch to the **master** realm → Realm settings → Security defenses → Brute force detection → enable, set *Max login failures* = `10`, keep temporary (not permanent) lockout.
 - Or via `kcadm.sh` (find the `auth` container name per the [appendix](#appendix-running-commands-in-docker)):

@@ -55,24 +55,6 @@ Upstream changes: [2.16.0, 2.16.1 and 2.17.0 in the Panoramax changelog](https:/
    docker exec <db_container_name> psql -U gvs -d geovisio -c "SELECT postgis_extensions_upgrade();"
    ```
 
-**Check the Keycloak master admin account exists.** Earlier versions of this repo never created one on a fresh deploy, for two reasons. First, from 17 July 2026 the bootstrap admin was passed to Keycloak under names it doesn't recognise. Second, Keycloak only creates that admin while initialising the master realm, and since the realm import moved into `keycloak-import`, that initialisation happens there, where the variables weren't set. So an instance first deployed with those versions most likely has no master-realm admin user. This release fixes both, but only for new databases. Check with the credential-login line from [`deployment_instructions.md` §6.1](./deployment_instructions.md#61-keycloak-realm-hardening):
-
-```bash
-docker exec -it <auth_container_name> sh -c '
-/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/oauth --realm master \
-  --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_PASSWORD"'
-```
-
-If it reports invalid credentials, either the account doesn't exist or its password has since been changed in Keycloak. To create a temporary admin, use Keycloak's [admin recovery command](https://www.keycloak.org/server/bootstrap-admin-recovery). Keycloak requires every server node to be stopped while it runs, so stop `auth` and run the command from the `keycloak-export` container, which uses the same image and database settings. It prompts for a username (default `temp-admin`) and a password:
-
-```bash
-docker stop <auth_container_name>
-docker exec -it <keycloak_export_container_name> /opt/keycloak/bin/kc.sh bootstrap-admin user --optimized
-docker start <auth_container_name>
-```
-
-Log in to the admin console with that temporary account, create a permanent admin, and then delete the temporary one.
-
 **Backups are unaffected.** Derivatives are never backed up. The database dumps, the picture mirror and `secrets.env` don't depend on the derivatives prefix name. Snapshots taken before the upgrade restore normally; restoring one just means entering the renamed variables in Coolify.
 
 
