@@ -85,11 +85,11 @@ docker exec <backup_container_name> restic-check.sh
 
 Derivatives (SD, thumbnail, tiles) are a cache derived from the permanent HD file. The permanent file is stored already blurred, so any regenerated derivate inherits the blur, and skipping them creates no privacy regression.
 
-How derivatives are restored depends on `PICTURE_PROCESS_DERIVATIVES_STRATEGY`:
+How derivatives are restored depends on `PICTURE_PROCESS_DERIVATES_STRATEGY`:
 
 - **`PREPROCESS`:** All derivatives are generated up front during processing.
   - If derivatives are still served through the API, the on-demand path remains as a fallback, so a missing file self-heals on request anyway.
-  - If you serve derivatives directly from S3 via `API_DERIVATIVES_PICTURES_PUBLIC_URL` (which *requires* `PREPROCESS`), the API is not in the request path, so missing files won't self-heal — you must requeue every picture for `prepare` after restore (§6, step 6), or temporarily serve derivatives through the API while the cache refills.
+  - If you serve derivatives directly from S3 via `API_DERIVATES_PICTURES_PUBLIC_URL` (which *requires* `PREPROCESS`), the API is not in the request path, so missing files won't self-heal — you must requeue every picture for `prepare` after restore (§6, step 6), or temporarily serve derivatives through the API while the cache refills.
 
 - **`ON_DEMAND`:** A missing derivate is generated from the HD original the first time it's requested, then cached.
 
@@ -333,7 +333,7 @@ panoramax_backend db refresh
 
 ### 6. Derivatives.
 
-This deployment hard-codes `PICTURE_PROCESS_DERIVATIVES_STRATEGY: PREPROCESS` and serves derivatives directly from S3 via `API_DERIVATIVES_PICTURES_PUBLIC_URL` — the API isn't in the request path, so missing derivatives won't self-heal (see §3). Derivatives are only ever produced by the `background-worker-*` containers pulling `prepare` jobs off the `job_queue` table; restoring the `geovisio` dump does **not** recreate those queue rows (they were already drained the first time these pictures were processed, before the backup was taken), so every picture needs to be requeued after a restore:
+This deployment hard-codes `PICTURE_PROCESS_DERIVATES_STRATEGY: PREPROCESS` and serves derivatives directly from S3 via `API_DERIVATES_PICTURES_PUBLIC_URL` — the API isn't in the request path, so missing derivatives won't self-heal (see §3). Derivatives are only ever produced by the `background-worker-*` containers pulling `prepare` jobs off the `job_queue` table; restoring the `geovisio` dump does **not** recreate those queue rows (they were already drained the first time these pictures were processed, before the backup was taken), so every picture needs to be requeued after a restore:
 
 ```bash
 # make sure to fill in db-container-name

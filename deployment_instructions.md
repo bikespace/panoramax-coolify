@@ -78,7 +78,7 @@ aws s3api get-bucket-cors \
 
 #### Step B — Make Production Public assets publicly readable:
 
-If you use the website/API's direct-S3 links (`API_DERIVATIVES_PICTURES_PUBLIC_URL` etc.), then the `&acl=public-read` part of `FS_PERMANENT_URL`/`FS_DERIVATIVES_URL` should ensure that the images and derivatives uploaded to S3-compatible storage are publicly viewable. This applies to new uploads as well as any generated (or re-generated) derivatives.
+If you use the website/API's direct-S3 links (`API_DERIVATES_PICTURES_PUBLIC_URL` etc.), then the `&acl=public-read` part of `FS_PERMANENT_URL`/`FS_DERIVATIVES_URL` should ensure that the images and derivatives uploaded to S3-compatible storage are publicly viewable. This applies to new uploads as well as any generated (or re-generated) derivatives.
 
 Alternatively, if your S3-compatible storage provider supports it, you can set a policy on the bucket:
 

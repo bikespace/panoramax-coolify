@@ -51,6 +51,8 @@ These five values live solely in Coolify's env var store, so they are the irrepl
 | `FS_PERMANENT_URL`   | **Required** | Storage for the original, already-blurred, high-definition pictures. Public bucket. |
 | `FS_DERIVATIVES_URL` | **Required** | Storage for SD, thumbnail, and 360° tiles. Public bucket.                           |
 
+Instances deployed before the 2.17.0 upgrade named this variable `FS_DERIVATES_URL` (and `S3_DERIVATIVES_PUBLIC_URL` was `S3_DERIVATES_PUBLIC_URL`), usually with a `derivates` prefix in the value. That prefix can stay as it is; see [`upgrade_instructions.md`](./upgrade_instructions.md).
+
 All three are S3 storage URLs with the credentials embedded in the URL:
 
 ```

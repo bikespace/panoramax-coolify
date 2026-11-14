@@ -35,6 +35,11 @@ Platform behaviours that aren't documented upstream and that this repo's compose
 Related upstream bugs for the three behaviours above: [coollabsio/coolify#8851](https://github.com/coollabsio/coolify/issues/8851), [#3674](https://github.com/coollabsio/coolify/issues/3674), [#7542](https://github.com/coollabsio/coolify/issues/7542).
 
 
+## Upstream behaviours to know
+
+**Upstream renamed only one of the `*_DERIVATES_*` variables, and the API doesn't read the new spelling yet.** 2.16.1 renamed `FS_DERIVATES_URL` to `FS_DERIVATIVES_URL`. As of 2.17.0, though, `geovisio/config_app.py` copies only the *old* name from the environment into the app config, so a container given only `FS_DERIVATIVES_URL` fails to start. `API_DERIVATES_PICTURES_PUBLIC_URL` and `PICTURE_PROCESS_DERIVATES_STRATEGY` were never renamed, and a misspelled copy is silently ignored. `docker-compose.yml` therefore maps the corrected Coolify-facing names onto the spellings the API reads (see [`changes_from_upstream.md`](./changes_from_upstream.md#s3-object-storage)). When syncing a new upstream release, check `confFromEnv` in `config_app.py` before assuming a renamed variable is actually read.
+
+
 ## Validating docker-compose.yml locally
 
 `docker-compose.yml` uses Coolify's `exclude_from_hc` extension field, which isn't part of the Compose Specification — a plain `docker compose config` will reject it as an unknown key. Coolify strips this field server-side before validating; do the same locally. The command below also passes dummy values for the `${VAR:?}` variables the file requires, so it can be copy-pasted and run as-is — no real secrets or `.env` file needed just to check the file parses:

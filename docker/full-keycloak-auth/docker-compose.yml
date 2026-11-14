@@ -20,8 +20,19 @@
 x-base-geovisio: &geovisio-default
   image: panoramax/api:${GEOVISIO_IMAGE_TAG:-latest}
 
+# Shared by migrations, api and the workers. All three open the picture storage
+# at startup (migrations too: db-upgrade builds the full app), so all three need
+# the FS_* variables — don't rely on Coolify injecting them.
 x-base-geovisio-env: &geovisio-default-env
   FS_URL: "" # Override the FS_URL default baked into the pre-built image; the split S3 variables are used instead
+  FS_TMP_URL: ${FS_TMP_URL:?}
+  FS_PERMANENT_URL: ${FS_PERMANENT_URL:?}
+  # Upstream (2.16.1) renamed FS_DERIVATES_URL to FS_DERIVATIVES_URL, but API
+  # 2.17.0 still reads only the old spelling from the environment. Pass both,
+  # so this keeps working once upstream reads the new one. See
+  # changes_from_upstream.md (S3 storage).
+  FS_DERIVATES_URL: ${FS_DERIVATIVES_URL:?}
+  FS_DERIVATIVES_URL: ${FS_DERIVATIVES_URL:?}
 
 x-base-keycloak: &keycloak-build
   build:
@@ -197,13 +208,13 @@ services:
       API_PICTURES_LICENSE_SPDX_ID: ${API_PICTURES_LICENSE_SPDX_ID:-CC-BY-SA-4.0}
       API_PICTURES_LICENSE_URL: ${API_PICTURES_LICENSE_URL:-https://spdx.org/licenses/CC-BY-SA-4.0.html}
       API_BLUR_URL: ${BLUR_API:-https://blur.panoramax.openstreetmap.fr}
-      API_DERIVATIVES_PICTURES_PUBLIC_URL: ${S3_DERIVATIVES_PUBLIC_URL:?}
+      # These two DERIVATES names were never renamed upstream (only the FS_ one
+      # was, see the anchor above), so the misspelling is deliberate. The
+      # Coolify-facing variable uses the corrected spelling.
+      API_DERIVATES_PICTURES_PUBLIC_URL: ${S3_DERIVATIVES_PUBLIC_URL:?}
       API_PERMANENT_PICTURES_PUBLIC_URL: ${S3_PERMANENT_PUBLIC_URL:?}
       PICTURE_PROCESS_THREADS_LIMIT: 0
-      PICTURE_PROCESS_DERIVATIVES_STRATEGY: PREPROCESS
-      FS_TMP_URL: ${FS_TMP_URL:?}
-      FS_PERMANENT_URL: ${FS_PERMANENT_URL:?}
-      FS_DERIVATIVES_URL: ${FS_DERIVATIVES_URL:?}
+      PICTURE_PROCESS_DERIVATES_STRATEGY: PREPROCESS
       NB_API_THREADS: 10
       # Default 2: Traefik (Coolify) + nginx (reverseproxy) both set X-Forwarded-For before reaching the API
       INFRA_NB_PROXIES: ${INFRA_NB_PROXIES:-2}
@@ -298,11 +309,8 @@ services:
     restart: always
     environment:
       <<: *geovisio-default-env
-      PICTURE_PROCESS_DERIVATIVES_STRATEGY: PREPROCESS
+      PICTURE_PROCESS_DERIVATES_STRATEGY: PREPROCESS
       DB_URL: postgres://gvs:${SERVICE_PASSWORD_64_PGPASSWORD}@db/geovisio
-      FS_TMP_URL: ${FS_TMP_URL:?}
-      FS_PERMANENT_URL: ${FS_PERMANENT_URL:?}
-      FS_DERIVATIVES_URL: ${FS_DERIVATIVES_URL:?}
       API_BLUR_URL: https://blur.panoramax.openstreetmap.fr
 
   background-worker-2:
