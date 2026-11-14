@@ -28,12 +28,20 @@ How to move an existing instance to a newer release of this repo. The general pr
 
 Upstream changes: [2.16.0, 2.16.1 and 2.17.0 in the Panoramax changelog](https://gitlab.com/panoramax/server/api/-/blob/main/CHANGELOG.md). Upstream recommends going through each minor version on large instances, because the 2.17.0 migrations can take a while. Jumping straight from 2.15 to 2.17 works, but may mean a longer migration window while the application is stopped.
 
+**Tip:** for convenience, save the current value of `FS_DERIVATES_URL`  and `S3_DERIVATES_PUBLIC_URL` in a secure note before clicking “Reload Compose”. When you reload the compose file with this `2.17.0` version, it will remove these two values from your config and replace them with blank entries to be filled out for `FS_DERIVATIVES_URL` and `S3_DERIVATIVES_PUBLIC_URL` (with the updated spellings). 
+
 **Coolify environment variables:**
 
-- **Rename the two derivatives variables, keeping their values exactly as they are.** Create `FS_DERIVATIVES_URL` with the same value as `FS_DERIVATES_URL`, and `S3_DERIVATIVES_PUBLIC_URL` with the same value as `S3_DERIVATES_PUBLIC_URL`. Then delete the two old variables. The deploy fails with a "required variable" error until both new ones are set.
-  - Keep the `derivates` prefix inside the values. The bucket path is whatever these variables say, so nothing in object storage has to move. Upstream's new `derivatives/` default only applies to single-`FS_URL` installs, which this repo doesn't use. To rename the prefix anyway, see [Optional: rename the derivatives prefix](#optional-rename-the-derivatives-prefix) below.
+- **Rename the two derivatives variables, keeping their values exactly as they are.** Save the values for `FS_DERIVATES_URL`  and `S3_DERIVATES_PUBLIC_URL` in a secure note. Then (in the “General” menu) click “Reload Compose, which will remove the old spellings and add the new `FS_DERIVATIVES_URL` and `S3_DERIVATIVES_PUBLIC_URL` variables. Copy the values saved from the old variables into the new ones. 
+  - Keep the `derivates` prefix inside the values.
+    The bucket path is whatever these variables say, so nothing in object storage has to move.
+    Upstream's new `derivatives/` default only applies to single-`FS_URL` installs, which this repo doesn't use.
+    To rename the prefix anyway, see [Optional: rename the derivatives prefix](#optional-rename-the-derivatives-prefix) below.
+  - If you forget to set the new variables, the deploy fails with a "required variable" error.
 - Set `GEOVISIO_IMAGE_TAG=2.17.0`.
-- Nothing else needs to change in Coolify. The Keycloak bootstrap admin variables changed name, but only inside `docker-compose.yml`; they still read `KEYCLOAK_ADMIN` and the same generated password. They only take effect on a brand-new database anyway.
+- Nothing else needs to change in Coolify.
+  The Keycloak bootstrap admin variables changed name, but only inside `docker-compose.yml`; they still read `KEYCLOAK_ADMIN` and the same generated password.
+  They only take effect on a brand-new database anyway.
 
 **Keycloak 26.6.0 → 26.7.2.** `keycloak-import` applies Keycloak's schema migrations on the first start; its log ends with `Realm 'geovisio' already exists. Import skipped`, and `auth` starts after it. Nothing to do. Before this release, `keycloak-import` couldn't migrate the schema, so any Keycloak version bump left it failing with `Database not up-to-date, please enable database migration` and `auth` never started. If you see that error, the deployed compose file is older than this release.
 
@@ -60,7 +68,10 @@ Upstream changes: [2.16.0, 2.16.1 and 2.17.0 in the Panoramax changelog](https:/
 
 ### Optional: rename the derivatives prefix
 
-Purely cosmetic: the instance works indefinitely with a `derivates` prefix. To switch, copy the cache to the new prefix with the one-off script in the `backup` container. It reads the current location from `FS_DERIVATIVES_URL` and copies within the same bucket. It never deletes anything, and it doesn't touch the running instance.
+This update is purely cosmetic: the instance works indefinitely with a `derivates` prefix.
+To switch, copy the cache to the new prefix with the one-off script in the `backup` container.
+It reads the current location from `FS_DERIVATIVES_URL` and copies within the same bucket.
+It never deletes anything, and it doesn't touch the running instance.
 
 ```bash
 # Dry run: shows source, destination and object counts; copies nothing.
@@ -72,9 +83,23 @@ docker exec -it <backup_container_name> migrate-derivatives-prefix.sh --apply de
 
 Then follow the steps it prints:
 
-1. Check that a copied file is publicly readable through the public URL. If it isn't, run `fix-object-acls.sh` on the new prefix; see [`backup_and_restore_instructions.md`](./backup_and_restore_instructions.md).
+1. Check that a copied file is publicly readable through the public URL.
+   If it isn't, run `fix-object-acls.sh` on the new prefix; see “Fixing object ACLs after a restore” in [`backup_and_restore_instructions.md`](./backup_and_restore_instructions.md).
 2. Change the prefix in both `FS_DERIVATIVES_URL` and `S3_DERIVATIVES_PUBLIC_URL`, and redeploy.
 3. Run the picture checks above.
 4. Only then delete the old prefix by hand.
 
 The script can run before or after the upgrade. New derivatives generated between the copy and the variable switch land in the old prefix and would be missed, so run it with the application stopped, or simply re-run `--apply` right before switching. Each re-run copies only what's new.
+
+To delete the images under the old prefix, you can run a command like:
+
+```sh
+# dry run
+aws s3 rm s3://<public_bucket_name>/derivates/ --recursive --dryrun \               
+--profile <your_profile_name> \
+--endpoint-url <your_endpoint_url>
+
+# optionally add `| grep delete | wc --lines` just to get the line count instead of the full output
+
+# to actually delete the images, run the command with `--dryrun` removed
+```

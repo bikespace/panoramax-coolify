@@ -241,7 +241,7 @@ The `backup` service ships encrypted Postgres/Keycloak/secrets dumps (via restic
 | ---------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `BACKUP_S3_ACCESS_KEY` | **Required** | Access key for the backup bucket.                                                                                                                                  |
 | `BACKUP_S3_SECRET_KEY` | **Required** | Secret key for the backup bucket.                                                                                                                                  |
-| `BACKUP_S3_ENDPOINT`   | **Required** | Endpoint URL for the backup bucket.                                                                                                                                |
+| `BACKUP_S3_ENDPOINT`   | **Required** | Endpoint URL for the backup bucket. **Do not include a trailing slash.**                                                                                           |
 | `BACKUP_S3_BUCKET`     | **Required** | Backup bucket name, e.g. `panoramax-backup`.                                                                                                                       |
 | `BACKUP_S3_REGION`     | Optional     | Region for the backup bucket. Left optional because many S3-compatible providers ignore it or encode it in the endpoint.                                           |
 | `RESTIC_PASSWORD`      | **Required** | Passphrase protecting the restic repository (Postgres dumps, Keycloak export, secrets). **Store it somewhere independent of the server — it cannot be recovered.** |

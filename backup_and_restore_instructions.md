@@ -25,7 +25,7 @@ Here is the data used and needed for a functioning application:
 | **`tmp/`** — pictures mid-blur                                                                                                                                                                             | S3 (`FS_TMP_URL`) or disk                                | ✅ Transient                     | 🚫 Skip              |
 | **Secrets & config** — Coolify env vars (secrets), `docker-compose.yml`, `keycloak-realm.json`, custom themes                                                                                              | Coolify UI + your repo                                   | ❌ No (secrets)                  | ✅ **Yes**           |
 
-Panoramax splits picture storage into `permanent` (irreplaceable originals) and `derivatives` (a disposable cache). The CLI even has `panoramax_backend cleanup --cache` whose only job is to delete derivatives — they are explicitly throwaway. Regeneration is covered in §3.
+Panoramax splits picture storage into `permanent` (irreplaceable originals, saved under `main-pictures/` in this set-up) and `derivatives` (a disposable cache). The CLI even has `panoramax_backend cleanup --cache` whose only job is to delete derivatives — they are explicitly throwaway. Regeneration is covered in §3.
 
 ### How it is backed up
 
@@ -311,6 +311,9 @@ If you accidentally uploaded or copied over some images without setting them as 
 Run it from any machine with `aws` configured (the `backup` container doesn't have the AWS CLI installed, since it's not otherwise needed for the automated nightly jobs):
 
 ```bash
+# endpoints to update may be "main-pictures" instead of "permanent"
+# or "derivates" instead of "deriviates".
+# Check `FS_PERMANENT_URL` and `FS_DERIVATIVES_URL` to be sure.
 docker/full-keycloak-auth/backup/fix-object-acls.sh \
   <PRODUCTION_AUTH_PROFILE_NAME> <PRODUCTION_PUBLIC_BUCKET_NAME> <PRODUCTION_PUBLIC_BUCKET_ENDPOINT> permanent derivatives
 ```
@@ -389,16 +392,16 @@ python3 -c "import secrets; print(secrets.token_hex(64))"
 
 Its output is hex (only digits and `a`–`f`, no symbols at all), so the same value is also safe to drop into the `postgres://` connection strings that carry `PG_PASSWORD` and `KC_DB_PASSWORD` (§7.3) without further escaping.
 
-| Secret                                                                       | Baked into                                           | Extra step beyond the env var?                                     |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------ |
-| `FLASK_SECRET_KEY` (`SERVICE_PASSWORD_64_FLASKSECRETKEY`)                    | nothing (runtime session-signing key)                | **No** — env var + redeploy `api` (§7.1)                           |
-| `OAUTH_CLIENT_SECRET` (`SERVICE_PASSWORD_64_OAUTHCLIENTSECRET`)              | Keycloak `geovisio` client (realm import, one-time)  | **Yes** — update it in Keycloak *and* the env var, in sync (§7.2)  |
-| `PG_PASSWORD` (`SERVICE_PASSWORD_64_PGPASSWORD`)                             | Postgres `gvs` role (set at first DB init only)      | **Yes** — `ALTER USER gvs …` in the DB (§7.3)                      |
-| `KC_DB_PASSWORD` (`SERVICE_PASSWORD_64_KCDBPASSWORD`)                        | Postgres `keycloak_user` role (first DB init only)   | **Yes** — `ALTER USER keycloak_user …` in the DB (§7.3)            |
-| `KEYCLOAK_ADMIN_PASSWORD` (`SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD`)      | Keycloak master-realm admin user (first DB init)     | **Yes** — reset inside Keycloak; env var alone does nothing (§7.4) |
-| `RESTIC_PASSWORD`                                                            | the encryption of the entire restic repo             | **Yes, critical** — re-key the repo *before* the env var (§7.5)    |
-| Production S3 keys (in `FS_TMP_URL`/`FS_PERMANENT_URL`/`FS_DERIVATIVES_URL`) | nothing in the DB                                    | Rotate at vendor, update all three URLs (§7.6)                     |
-| Backup S3 keys (`BACKUP_S3_ACCESS_KEY`/`BACKUP_S3_SECRET_KEY`)               | nothing in the DB                                    | Rotate at vendor, update both vars (§7.6)                          |
+| Secret                                                                       | Baked into                                          | Extra step beyond the env var?                                     |
+| ---------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------ |
+| `FLASK_SECRET_KEY` (`SERVICE_PASSWORD_64_FLASKSECRETKEY`)                    | nothing (runtime session-signing key)               | **No** — env var + redeploy `api` (§7.1)                           |
+| `OAUTH_CLIENT_SECRET` (`SERVICE_PASSWORD_64_OAUTHCLIENTSECRET`)              | Keycloak `geovisio` client (realm import, one-time) | **Yes** — update it in Keycloak *and* the env var, in sync (§7.2)  |
+| `PG_PASSWORD` (`SERVICE_PASSWORD_64_PGPASSWORD`)                             | Postgres `gvs` role (set at first DB init only)     | **Yes** — `ALTER USER gvs …` in the DB (§7.3)                      |
+| `KC_DB_PASSWORD` (`SERVICE_PASSWORD_64_KCDBPASSWORD`)                        | Postgres `keycloak_user` role (first DB init only)  | **Yes** — `ALTER USER keycloak_user …` in the DB (§7.3)            |
+| `KEYCLOAK_ADMIN_PASSWORD` (`SERVICE_PASSWORD_64_KEYCLOAKADMINPASSWORD`)      | Keycloak master-realm admin user (first DB init)    | **Yes** — reset inside Keycloak; env var alone does nothing (§7.4) |
+| `RESTIC_PASSWORD`                                                            | the encryption of the entire restic repo            | **Yes, critical** — re-key the repo *before* the env var (§7.5)    |
+| Production S3 keys (in `FS_TMP_URL`/`FS_PERMANENT_URL`/`FS_DERIVATIVES_URL`) | nothing in the DB                                   | Rotate at vendor, update all three URLs (§7.6)                     |
+| Backup S3 keys (`BACKUP_S3_ACCESS_KEY`/`BACKUP_S3_SECRET_KEY`)               | nothing in the DB                                   | Rotate at vendor, update both vars (§7.6)                          |
 
 After **any** rotation, take a one-off backup (§7.7) — otherwise your newest backup still contains the *old* secrets.
 

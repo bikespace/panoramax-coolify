@@ -256,6 +256,20 @@ CID=$(/opt/keycloak/bin/kcadm.sh get clients -r geovisio -q clientId=geovisio --
 
 ---
 
+## Appendix: user management
+
+To create a new user account:
+
+1. Log in to `<YOUR_INSTANCE_DOMAIN>/oauth/admin` using the `KEYCLOAK_ADMIN` and `KEYCLOAK_ADMIN_PASSWORD` credentials.
+2. Navigate to Manage realms > geovisio > Users
+3. Create a new user and set “reset password” as a required user action.
+   If you have SMTP set up in Keycloak, you can add their email and they will be able to set their own password using the “forgot password” option.
+4. If you do not have SMTP set up in Keycloak, after you create the user, navigate to Credentials and set a temporary password that they can use to log in and set a new password for themselves.
+
+**Important note:** Do not use the [`panoramax_backend` cli option](https://docs.panoramax.fr/backend/install/cli/#users-management) for creating user accounts. Keycloak will take care of provisioning the account on the API side for you.
+
+---
+
 ## Appendix: running commands in Docker
 
 Several steps in this document and in the backup instructions require running commands in one of the docker containers being run by the service. Coolify appends unique IDs to the container names on each deployment, so you will need to find the container name or ID before you can run a command. The beginning of the container name will be the same as the service name in the docker compose file; you can also double check you have the right container by looking at the "logs" menu in Coolify.
