@@ -73,7 +73,7 @@ Once you've reviewed what it reports — ported the changes, or decided they don
 sh scripts/check-upstream.sh --record
 ```
 
-That updates `.upstream-sync`, which records the upstream **commit SHA** last reviewed (plus the date, as human context).
+That updates `.upstream-sync`, which records the upstream **commit SHA** last reviewed, plus, as human context, the upstream release tag pointing at that commit (`none` if the tip isn't a tagged release) and the date. The SHA is what the script compares against; the tag is informational.
 
 **Inspect or pull in a file.** These need the upstream remote configured (the check script does not):
 

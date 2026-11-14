@@ -22,11 +22,21 @@ STATE="$ROOT/.upstream-sync"
 git -C "$ROOT" fetch --quiet "$UPSTREAM_URL" "$UPSTREAM_BRANCH"
 TIP=$(git -C "$ROOT" rev-parse FETCH_HEAD)
 
-echo "Upstream $UPSTREAM_BRANCH tip: $(git -C "$ROOT" log -1 --pretty='%h %ad %s' --date=short "$TIP")"
+# Release tag pointing at the tip, if any — informational only, the SHA is what
+# gets compared. Annotated tags are listed twice by ls-remote (the tag object,
+# then the peeled commit as "<tag>^{}"); lightweight tags only once. Matching
+# the commit SHA on either form covers both.
+TIP_TAG=$(git ls-remote --tags "$UPSTREAM_URL" \
+  | awk -v tip="$TIP" '$1 == tip { sub("^refs/tags/", "", $2); sub("\\^\\{\\}$", "", $2); print $2; exit }')
+TIP_TAG=${TIP_TAG:-none}
+
+echo "Upstream $UPSTREAM_BRANCH tip: $(git -C "$ROOT" log -1 --pretty='%h %ad %s' --date=short "$TIP") (tag: $TIP_TAG)"
 
 SINCE=''
+SINCE_TAG=''
 if [ -f "$STATE" ]; then
   SINCE=$(sed -n 's/^last_reviewed_sha=//p' "$STATE")
+  SINCE_TAG=$(sed -n 's/^last_reviewed_tag=//p' "$STATE")
 fi
 
 if [ -z "$SINCE" ]; then
@@ -40,6 +50,9 @@ fi
 if [ -n "$SINCE" ]; then
   RANGE="$SINCE..$TIP"
   SINCE_DESC="$(git -C "$ROOT" log -1 --pretty='%h (%ad)' --date=short "$SINCE")"
+  if [ -n "$SINCE_TAG" ] && [ "$SINCE_TAG" != none ]; then
+    SINCE_DESC="$SINCE_TAG, $SINCE_DESC"
+  fi
 else
   RANGE="$TIP"
   SINCE_DESC='the beginning'
@@ -63,11 +76,12 @@ if [ "$RECORD" = yes ]; then
   TMP="$STATE.tmp"
   {
     echo "last_reviewed_sha=$TIP"
+    echo "last_reviewed_tag=$TIP_TAG"
     echo "last_checked_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   } > "$TMP"
   mv "$TMP" "$STATE"
   echo
-  echo "Recorded $TIP as reviewed in .upstream-sync."
+  echo "Recorded $TIP (tag: $TIP_TAG) as reviewed in .upstream-sync."
 elif [ "$RESULT" = changes ]; then
   echo
   echo "Once these are reviewed or ported, re-run with --record to mark them done."
