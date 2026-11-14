@@ -272,7 +272,7 @@ Alternatively, you can do it via command:
 ```bash
 docker exec -it <auth_container_name> sh -c '
 /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/oauth --realm master \
-  --user admin --password "$KC_BOOTSTRAP_KEYCLOAK_ADMIN_PASSWORD"
+  --user admin --password "$KC_BOOTSTRAP_ADMIN_USERNAME_PASSWORD"
 CID=$(/opt/keycloak/bin/kcadm.sh get clients -r geovisio -q clientId=geovisio --fields id --format csv --noquotes | tail -1)
 /opt/keycloak/bin/kcadm.sh update clients/$CID -r geovisio -s "rootUrl=https://<new-domain>"
 '
@@ -419,7 +419,7 @@ Or via `kcadm.sh`, reusing the pattern from §6 step 2:
 ```bash
 docker exec -it <auth_container_name> sh -c '
 /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/oauth --realm master \
-  --user "$KC_BOOTSTRAP_KEYCLOAK_ADMIN" --password "$KC_BOOTSTRAP_KEYCLOAK_ADMIN_PASSWORD"
+  --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_USERNAME_PASSWORD"
 CID=$(/opt/keycloak/bin/kcadm.sh get clients -r geovisio -q clientId=geovisio --fields id --format csv --noquotes | tail -1)
 /opt/keycloak/bin/kcadm.sh update clients/$CID -r geovisio -s "secret=<NEW_SECRET>"
 '
@@ -452,7 +452,7 @@ The simplest correct approach is to update the value and redeploy the whole stac
 
 ### 7.4 `KEYCLOAK_ADMIN_PASSWORD`
 
-The Keycloak master-realm admin password is bootstrapped into the DB the first time `auth` starts (from `KC_BOOTSTRAP_KEYCLOAK_ADMIN_PASSWORD`) and then hashed and stored. Changing the env var afterward has **no effect** on the stored password — you must reset it inside Keycloak.
+The Keycloak master-realm admin password is bootstrapped into the DB the first time `auth` starts (from `KC_BOOTSTRAP_ADMIN_USERNAME_PASSWORD`) and then hashed and stored. Changing the env var afterward has **no effect** on the stored password — you must reset it inside Keycloak.
 
 Via the Keycloak Admin Console (master realm): Users → the admin user (`admin` by default) → **Credentials** → **Reset password** → set a new one (untick "Temporary").
 
@@ -461,8 +461,8 @@ Or via `kcadm.sh`:
 ```bash
 docker exec -it <auth_container_name> sh -c '
 /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/oauth --realm master \
-  --user "$KC_BOOTSTRAP_KEYCLOAK_ADMIN" --password "$KC_BOOTSTRAP_KEYCLOAK_ADMIN_PASSWORD"
-/opt/keycloak/bin/kcadm.sh set-password -r master --username "$KC_BOOTSTRAP_KEYCLOAK_ADMIN" --new-password "<NEW_ADMIN_PASSWORD>"
+  --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_USERNAME_PASSWORD"
+/opt/keycloak/bin/kcadm.sh set-password -r master --username "$KC_BOOTSTRAP_ADMIN_USERNAME" --new-password "<NEW_ADMIN_PASSWORD>"
 '
 ```
 
