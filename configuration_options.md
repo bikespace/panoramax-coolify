@@ -18,10 +18,10 @@ Note that `PGHOST` and `PGUSER` are **not Coolify-settable at all** — they are
 
 ## Instance identity
 
-| Variable        | Required                                  | Description                                                                                                                                    |
-| --------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Variable        | Required                                  | Description                                                                                                                                                                                                                                                                                                                                              |
+| --------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `INSTANCE_NAME` | Optional (default `A Panoramax instance`) | The name of your instance which will appear in the top left of the website. This sets the **website** only — the name the API publishes is `API_SUMMARY_NAME_EN`, which defaults to the same text but is set separately. Set both, or the site header and the API metadata will disagree; see [API and instance behaviour](#api-and-instance-behaviour). |
-| `DOMAIN`        | **Required**                              | URL of your own domain (without a scheme or a path, just the domain). Must match the domain you set for the `reverseproxy` service in Coolify. |
+| `DOMAIN`        | **Required**                              | URL of your own domain (without a scheme or a path, just the domain). Must match the domain you set for the `reverseproxy` service in Coolify.                                                                                                                                                                                                           |
 
 ## Secrets
 
@@ -45,11 +45,11 @@ These five values live solely in Coolify's env var store, so they are the irrepl
 
 ## Picture storage (production S3)
 
-| Variable           | Required     | Description                                                                         |
-| ------------------ | ------------ | ----------------------------------------------------------------------------------- |
-| `FS_TMP_URL`       | **Required** | Storage for pictures mid-blur. Should point at the private bucket.                  |
-| `FS_PERMANENT_URL` | **Required** | Storage for the original, already-blurred, high-definition pictures. Public bucket. |
-| `FS_DERIVATES_URL` | **Required** | Storage for SD, thumbnail, and 360° tiles. Public bucket.                           |
+| Variable             | Required     | Description                                                                         |
+| -------------------- | ------------ | ----------------------------------------------------------------------------------- |
+| `FS_TMP_URL`         | **Required** | Storage for pictures mid-blur. Should point at the private bucket.                  |
+| `FS_PERMANENT_URL`   | **Required** | Storage for the original, already-blurred, high-definition pictures. Public bucket. |
+| `FS_DERIVATIVES_URL` | **Required** | Storage for SD, thumbnail, and 360° tiles. Public bucket.                           |
 
 All three are S3 storage URLs with the credentials embedded in the URL:
 
@@ -64,15 +64,15 @@ Example for OVH Cloud (replace `gra` with your region, and fill in real credenti
 ```
 FS_TMP_URL=s3://ACCESS_KEY:SECRET_KEY@panoramax-private/tmp?endpoint_url=https%3A%2F%2Fs3.gra.io.cloud.ovh.net&region=gra
 FS_PERMANENT_URL=s3://ACCESS_KEY:SECRET_KEY@panoramax-public/main-pictures?endpoint_url=https%3A%2F%2Fs3.gra.io.cloud.ovh.net&region=gra&acl=public-read
-FS_DERIVATES_URL=s3://ACCESS_KEY:SECRET_KEY@panoramax-public/derivates?endpoint_url=https%3A%2F%2Fs3.gra.io.cloud.ovh.net&region=gra&acl=public-read
+FS_DERIVATIVES_URL=s3://ACCESS_KEY:SECRET_KEY@panoramax-public/derivatives?endpoint_url=https%3A%2F%2Fs3.gra.io.cloud.ovh.net&region=gra&acl=public-read
 ```
 
 ## Public picture URLs
 
-| Variable                  | Required     | Description                                            |
-| ------------------------- | ------------ | ------------------------------------------------------ |
-| `S3_PERMANENT_PUBLIC_URL` | **Required** | Public-facing base URL for serving permanent pictures. |
-| `S3_DERIVATES_PUBLIC_URL` | **Required** | Public-facing base URL for serving derivates.          |
+| Variable                    | Required     | Description                                            |
+| --------------------------- | ------------ | ------------------------------------------------------ |
+| `S3_PERMANENT_PUBLIC_URL`   | **Required** | Public-facing base URL for serving permanent pictures. |
+| `S3_DERIVATIVES_PUBLIC_URL` | **Required** | Public-facing base URL for serving derivatives.        |
 
 These carry no credentials — they are used by clients to fetch images directly from S3. Example for OVH Cloud: `https://panoramax-public.s3.gra.io.cloud.ovh.net/main-pictures`
 
@@ -86,14 +86,14 @@ These carry no credentials — they are used by clients to fetch images directly
 | `BLUR_API`                     | Optional (default `https://blur.panoramax.openstreetmap.fr`)     | Change this if you have your own blur API instance.                                                                                                                                                                                                                                                                                                    |
 | `API_PICTURES_LICENSE_SPDX_ID` | Optional (default `CC-BY-SA-4.0`)                                | SPDX id of the picture's license. If none is set, the pictures's license is considered to be proprietary.                                                                                                                                                                                                                                              |
 | `API_PICTURES_LICENSE_URL`     | Optional (default `https://spdx.org/licenses/CC-BY-SA-4.0.html`) | URL for the license.                                                                                                                                                                                                                                                                                                                                   |
-| `API_SUMMARY_NAME_EN`          | Recommended (default `A Panoramax instance`)                     | Short name of the instance, as it appears in the API and in federation listings. Set this to match `INSTANCE_NAME`. |
-| `API_SUMMARY_NAME_FR`          | Optional (default `Mon petit serveur des familles`)              | French translation of the above. The default is upstream's placeholder — set it, or drop the field entirely (see the notes below).                                                                                                                                                                                                |
-| `API_SUMMARY_DESCRIPTION_EN`   | Recommended (default `a long description`)                       | Longer description of the instance. |
-| `API_SUMMARY_DESCRIPTION_FR`   | Optional (default `une description longue`)                      | French translation of the above.                                                                                                                                                                                                                                                                                                  |
-| `API_SUMMARY_GEO_COVERAGE_EN`  | Recommended (default `Anywhere you like`)                        | The geographic area the instance covers. |
-| `API_SUMMARY_GEO_COVERAGE_FR`  | Optional (default `Partout où le vent vous portera`)             | French translation of the above.                                                                                                                                                                                                                                                                                             |
+| `API_SUMMARY_NAME_EN`          | Recommended (default `A Panoramax instance`)                     | Short name of the instance, as it appears in the API and in federation listings. Set this to match `INSTANCE_NAME`.                                                                                                                                                                                                                                    |
+| `API_SUMMARY_NAME_FR`          | Optional (default `Mon petit serveur des familles`)              | French translation of the above. The default is upstream's placeholder — set it, or drop the field entirely (see the notes below).                                                                                                                                                                                                                     |
+| `API_SUMMARY_DESCRIPTION_EN`   | Recommended (default `a long description`)                       | Longer description of the instance.                                                                                                                                                                                                                                                                                                                    |
+| `API_SUMMARY_DESCRIPTION_FR`   | Optional (default `une description longue`)                      | French translation of the above.                                                                                                                                                                                                                                                                                                                       |
+| `API_SUMMARY_GEO_COVERAGE_EN`  | Recommended (default `Anywhere you like`)                        | The geographic area the instance covers.                                                                                                                                                                                                                                                                                                               |
+| `API_SUMMARY_GEO_COVERAGE_FR`  | Optional (default `Partout où le vent vous portera`)             | French translation of the above.                                                                                                                                                                                                                                                                                                                       |
 | `API_SUMMARY_COLOR`            | Optional (default `#abcdef`)                                     | HTML colour code used as the instance's accent colour.                                                                                                                                                                                                                                                                                                 |
-| `API_SUMMARY_LOGO`             | Optional (default is the generic Panoramax logo)                 | URL of an SVG logo for the instance. This is the logo published in the API metadata; it is separate from the logo shown on the website, which is a file — see [Branding](#branding-logo-favicon-social-image).                                                                                                                                          |
+| `API_SUMMARY_LOGO`             | Optional (default is the generic Panoramax logo)                 | URL of an SVG logo for the instance. This is the logo published in the API metadata; it is separate from the logo shown on the website, which is a file — see [Branding](#branding-logo-favicon-social-image).                                                                                                                                         |
 | `API_SUMMARY_EMAIL`            | Recommended (default `the_administrator@mypanoramax.org`)        | Public contact address for the instance administrator.                                                                                                                                                                                                                                                                                                 |
 
 More assistance with these options can be found in the [Panoramax API documentation](https://docs.panoramax.fr/backend/install/settings/).

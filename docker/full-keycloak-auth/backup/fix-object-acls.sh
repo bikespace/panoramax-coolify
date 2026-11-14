@@ -7,7 +7,7 @@
 # bucket-level ACL only grants anonymous *list* rights; it does not make
 # individual objects readable, and neither `rclone copy`/`move` nor the
 # picture-worker's own S3 writes set an object ACL. Run this after any image
-# restore, or any time pictures/derivates 404 on the site despite the file
+# restore, or any time pictures/derivatives 404 on the site despite the file
 # provably existing (check with `rclone lsf` or `aws s3api get-object-acl`).
 #
 # Usage:

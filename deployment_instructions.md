@@ -18,7 +18,7 @@ If you are restoring an existing instance from a backup rather than starting fre
 
 You need three S3-compatible buckets:
 
-- **Production Public** (used for `FS_PERMANENT_URL`, `FS_DERIVATES_URL`, `S3_PERMANENT_PUBLIC_URL`, and `S3_DERIVATES_PUBLIC_URL`): encryption is good, but you don't need versioning or object lock set for this one. You will have to make it publicly accessible and set CORS headers (see below).
+- **Production Public** (used for `FS_PERMANENT_URL`, `FS_DERIVATIVES_URL`, `S3_PERMANENT_PUBLIC_URL`, and `S3_DERIVATIVES_PUBLIC_URL`): encryption is good, but you don't need versioning or object lock set for this one. You will have to make it publicly accessible and set CORS headers (see below).
 - **Production Private** (`FS_TMP_URL`): encryption is good, but you don't need versioning or object lock set for this one. This should not be public.
 - **Backup** (for all the `BACKUP_S3_*` environment variables): for this one you should enable encryption, versioning, and a lifecycle rule that objects are retained for 30 days. This should not be public.
 
@@ -78,7 +78,7 @@ aws s3api get-bucket-cors \
 
 #### Step B — Make Production Public assets publicly readable:
 
-If you use the website/API's direct-S3 links (`API_DERIVATES_PICTURES_PUBLIC_URL` etc.), then the `&acl=public-read` part of `FS_PERMANENT_URL`/`FS_DERIVATES_URL` should ensure that the images and derivates uploaded to S3-compatible storage are publicly viewable. This applies to new uploads as well as any generated (or re-generated) derivates.
+If you use the website/API's direct-S3 links (`API_DERIVATIVES_PICTURES_PUBLIC_URL` etc.), then the `&acl=public-read` part of `FS_PERMANENT_URL`/`FS_DERIVATIVES_URL` should ensure that the images and derivatives uploaded to S3-compatible storage are publicly viewable. This applies to new uploads as well as any generated (or re-generated) derivatives.
 
 Alternatively, if your S3-compatible storage provider supports it, you can set a policy on the bucket:
 

@@ -41,8 +41,8 @@ Related upstream bugs for the three behaviours above: [coollabsio/coolify#8851](
 
 ```bash
 grep -v 'exclude_from_hc' docker/full-keycloak-auth/docker-compose.yml | \
-  DOMAIN=x S3_DERIVATES_PUBLIC_URL=x S3_PERMANENT_PUBLIC_URL=x \
-  FS_TMP_URL=x FS_PERMANENT_URL=x FS_DERIVATES_URL=x \
+  DOMAIN=x S3_DERIVATIVES_PUBLIC_URL=x S3_PERMANENT_PUBLIC_URL=x \
+  FS_TMP_URL=x FS_PERMANENT_URL=x FS_DERIVATIVES_URL=x \
   BACKUP_S3_ENDPOINT=x BACKUP_S3_BUCKET=x BACKUP_S3_ACCESS_KEY=x BACKUP_S3_SECRET_KEY=x \
   RESTIC_PASSWORD=x \
   docker compose -f - config -q

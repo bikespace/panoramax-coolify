@@ -5,7 +5,7 @@
 # (see backup-images.sh) then mirrors the cleanup into the backup on its next run.
 #
 # Scope: the permanent bucket only (FS_PERMANENT_URL) — the only bucket that is
-# backed up. Derivates/tmp are regenerable and left untouched.
+# backed up. Derivatives/tmp are regenerable and left untouched.
 #
 # Usage:
 #   prune-orphan-images.sh            # dry run: list orphans, delete nothing

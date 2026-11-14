@@ -197,13 +197,13 @@ services:
       API_PICTURES_LICENSE_SPDX_ID: ${API_PICTURES_LICENSE_SPDX_ID:-CC-BY-SA-4.0}
       API_PICTURES_LICENSE_URL: ${API_PICTURES_LICENSE_URL:-https://spdx.org/licenses/CC-BY-SA-4.0.html}
       API_BLUR_URL: ${BLUR_API:-https://blur.panoramax.openstreetmap.fr}
-      API_DERIVATES_PICTURES_PUBLIC_URL: ${S3_DERIVATES_PUBLIC_URL:?}
+      API_DERIVATIVES_PICTURES_PUBLIC_URL: ${S3_DERIVATIVES_PUBLIC_URL:?}
       API_PERMANENT_PICTURES_PUBLIC_URL: ${S3_PERMANENT_PUBLIC_URL:?}
       PICTURE_PROCESS_THREADS_LIMIT: 0
-      PICTURE_PROCESS_DERIVATES_STRATEGY: PREPROCESS
+      PICTURE_PROCESS_DERIVATIVES_STRATEGY: PREPROCESS
       FS_TMP_URL: ${FS_TMP_URL:?}
       FS_PERMANENT_URL: ${FS_PERMANENT_URL:?}
-      FS_DERIVATES_URL: ${FS_DERIVATES_URL:?}
+      FS_DERIVATIVES_URL: ${FS_DERIVATIVES_URL:?}
       NB_API_THREADS: 10
       # Default 2: Traefik (Coolify) + nginx (reverseproxy) both set X-Forwarded-For before reaching the API
       INFRA_NB_PROXIES: ${INFRA_NB_PROXIES:-2}
@@ -276,7 +276,7 @@ services:
     restart: always
 
   # Background workers used to process pictures in the background
-  # calling the blur API and generating derivates (SD picture and tiles for faster rendering in photosphereviewer)
+  # calling the blur API and generating derivatives (SD picture and tiles for faster rendering in photosphereviewer)
   # Several background workers can run together — add or remove numbered services below to adjust the count.
   # Note: the blurring is configured to be done using the OSM-FR service, you can change the variable `API_BLUR_URL` if needed (in the API too).
   background-worker-1: &worker-default
@@ -298,11 +298,11 @@ services:
     restart: always
     environment:
       <<: *geovisio-default-env
-      PICTURE_PROCESS_DERIVATES_STRATEGY: PREPROCESS
+      PICTURE_PROCESS_DERIVATIVES_STRATEGY: PREPROCESS
       DB_URL: postgres://gvs:${SERVICE_PASSWORD_64_PGPASSWORD}@db/geovisio
       FS_TMP_URL: ${FS_TMP_URL:?}
       FS_PERMANENT_URL: ${FS_PERMANENT_URL:?}
-      FS_DERIVATES_URL: ${FS_DERIVATES_URL:?}
+      FS_DERIVATIVES_URL: ${FS_DERIVATIVES_URL:?}
       API_BLUR_URL: https://blur.panoramax.openstreetmap.fr
 
   background-worker-2:
