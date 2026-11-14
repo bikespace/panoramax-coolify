@@ -8,7 +8,7 @@ Everything runs inside one small `backup` sidecar container defined in `docker-c
 
 | File                            | Role                                                                                                                       |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `Dockerfile`                    | Alpine base with `postgresql16-client`, `rclone`, `restic`, `gettext` (for `envsubst`), and a pinned `supercronic` binary. |
+| `Dockerfile`                    | Alpine base with `postgresql16-client` and `gettext` (for `envsubst`), plus pinned `rclone`, `restic` and `supercronic`.   |
 | `entrypoint.sh`                 | Renders the crontab from env vars, initialises the restic repo if needed, then execs supercronic.                          |
 | `crontab.template`              | The four scheduled jobs, with schedules as `${VAR}` placeholders.                                                          |
 | `backup-db.sh`                  | Postgres dumps → restic.                                                                                                   |
